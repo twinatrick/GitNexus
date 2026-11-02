@@ -1,7 +1,7 @@
 {
   "name": "gitnexus",
   "version": "1.6.12",
-  "description": "Graph-powered code intelligence for AI agents. Index any codebase, query via MCP or CLI.",
+  "description": "Graph-powered code intelligence for AI agents. Index any codebase, query via MCP or CLI. (Hardened OpenCode Security Fork)",
   "author": "Abhigyan Patwari",
   "license": "PolyForm-Noncommercial-1.0.0",
   "homepage": "https://github.com/abhigyanpatwari/GitNexus#readme",
@@ -83,7 +83,6 @@
   "dependencies": {
     "@ladybugdb/core": "0.22.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@scarf/scarf": "^1.4.0",
     "busboy": "^1.6.0",
     "chokidar": "^5.0.0",
     "cli-progress": "^3.12.0",

@@ -1010,7 +1010,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
   // cors: the cors middleware ends OPTIONS preflight responses, so this header
   // has to be set on res before cors writes the preflight reply.
   app.use((_req, res, next) => {
-    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    // Hardened Fork (ADR-0003): Removed Access-Control-Allow-Private-Network: true to block RFC1918/drive-by PNA exfiltration
     next();
   });
 

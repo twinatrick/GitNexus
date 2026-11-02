@@ -167,8 +167,19 @@ export const walkRepositoryPaths = async (
     const batch = filtered.slice(start, start + READ_CONCURRENCY);
     const results = await Promise.allSettled(
       batch.map(async (relativePath) => {
+        // HARDENED_SYMLINK_CONTAINMENT: verify resolved realpath stays inside repoPath
         const fullPath = path.join(repoPath, relativePath);
-        const stat = await fs.stat(fullPath);
+        const [repoReal, targetReal] = await Promise.all([
+          fs.realpath(repoPath),
+          fs.realpath(fullPath),
+        ]);
+        const relToRepo = path.relative(repoReal, targetReal);
+        if (relToRepo.startsWith('..') || path.isAbsolute(relToRepo)) {
+          skippedNonRegular++;
+          if (skippedNonRegularPreview.length < 5) skippedNonRegularPreview.push(relativePath);
+          return null;
+        }
+        const stat = await fs.stat(targetReal);
         // glob's nodir still returns symlinks to directories. Follow the same
         // target that hashing reads, retaining file symlinks but no directories
         // or special files that cannot belong to the indexed coverage set.
@@ -295,7 +306,15 @@ export const readFileContents = async (
     relativePaths,
     async (relativePath) => {
       const fullPath = path.join(repoPath, relativePath);
-      const content = await fs.readFile(fullPath, 'utf-8');
+      const [repoReal, targetReal] = await Promise.all([
+        fs.realpath(repoPath),
+        fs.realpath(fullPath),
+      ]);
+      const relToRepo = path.relative(repoReal, targetReal);
+      if (relToRepo.startsWith('..') || path.isAbsolute(relToRepo)) {
+        throw new Error('Blocked out-of-tree symlink read: ' + relativePath);
+      }
+      const content = await fs.readFile(targetReal, 'utf-8');
       return { path: relativePath, content };
     },
     { concurrency: READ_CONCURRENCY },

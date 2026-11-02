@@ -211,15 +211,19 @@ function getMcpEntry() {
  */
 function getOpenCodeMcpEntry() {
   const bin = resolveGitnexusBin();
+  const environment = {
+    GITNEXUS_MCP_READ_ONLY: '1',
+    GITNEXUS_NO_UPDATE_NOTIFIER: '1',
+  };
 
   if (bin) {
-    return { type: 'local', command: [bin, 'mcp'] };
+    return { type: 'local', command: [bin, 'mcp'], environment };
   }
 
   if (process.platform === 'win32') {
-    return { type: 'local', command: ['cmd', '/c', 'npx', '-y', MCP_PINNED_REF, 'mcp'] };
+    return { type: 'local', command: ['cmd', '/c', 'npx', '-y', MCP_PINNED_REF, 'mcp'], environment };
   }
-  return { type: 'local', command: ['npx', '-y', MCP_PINNED_REF, 'mcp'] };
+  return { type: 'local', command: ['npx', '-y', MCP_PINNED_REF, 'mcp'], environment };
 }
 
 /**

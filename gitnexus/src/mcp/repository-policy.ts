@@ -443,7 +443,30 @@ export async function createMcpRepositoryPolicy(
 ): Promise<McpRepositoryPolicy> {
   const raw = parseRepositoryPolicy(env);
   if (!raw.allowed && !raw.defaultRepo) {
-    return McpRepositoryPolicy.unrestricted();
+    if (env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY === '1') {
+      return McpRepositoryPolicy.unrestricted();
+    }
+    const registry = (await backend.listRepos()).map((repo) => ({
+      name: repo.name,
+      path: repo.path,
+      pathKey: normalizedPath(repo.path),
+    }));
+    const cwdKey = normalizedPath(env.GITNEXUS_WORKSPACE_ROOT || process.cwd());
+    const sep = path.sep;
+    const cwdPrefix = cwdKey.endsWith(sep) ? cwdKey : cwdKey + sep;
+    const cwdScoped = registry.filter((repo) => {
+      const repoPrefix = repo.pathKey.endsWith(sep) ? repo.pathKey : repo.pathKey + sep;
+      return (
+        repo.pathKey === cwdKey ||
+        repo.pathKey.startsWith(cwdPrefix) ||
+        cwdKey.startsWith(repoPrefix)
+      );
+    });
+    return new McpRepositoryPolicy(
+      registry,
+      cwdScoped,
+      cwdScoped.length === 1 ? cwdScoped[0] : undefined,
+    );
   }
 
   const registry = (await backend.listRepos()).map((repo) => ({
