@@ -27,7 +27,8 @@ export function isTruthyEnv(value: string | undefined): boolean {
 }
 
 /** The update notifier is disabled by either opt-out env or a CI environment. */
-export function updateNotifierOptedOut(env: NodeJS.ProcessEnv): boolean {
+export function updateNotifierOptedOut(env = process.env) {
+  if (!isTruthyEnv(env.GITNEXUS_ENABLE_UPDATE_CHECK)) return true;
   return (
     isTruthyEnv(env.GITNEXUS_NO_UPDATE_NOTIFIER) ||
     isTruthyEnv(env.NO_UPDATE_NOTIFIER) ||

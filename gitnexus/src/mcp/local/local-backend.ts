@@ -10378,6 +10378,44 @@ export class LocalBackend {
     if (realRel === '..' || realRel.startsWith(`..${path.sep}`) || path.isAbsolute(realRel)) {
       return { error: 'Path traversal denied.' };
     }
+    if (process.env.GITNEXUS_ALLOW_SECRET_READS !== '1') {
+      const checkSecret = (rel: string): boolean => {
+        const norm = rel.replace(/\\/g, '/').toLowerCase();
+        const base = path.posix.basename(norm);
+        if (
+          base === '.env.example' ||
+          base === '.env.sample' ||
+          base === '.env.template' ||
+          base === '.env.defaults'
+        ) {
+          return false;
+        }
+        if (base === '.env' || base.startsWith('.env.')) return true;
+        if (
+          base === '.npmrc' ||
+          base === '.pypirc' ||
+          base === '.netrc' ||
+          base === 'id_rsa' ||
+          base === 'id_ed25519' ||
+          base === 'id_ecdsa' ||
+          base === 'id_dsa'
+        ) {
+          return true;
+        }
+        if (
+          norm === '.git/config' ||
+          norm === '.git/credentials' ||
+          norm.endsWith('/.git/config') ||
+          norm.endsWith('/.git/credentials')
+        ) {
+          return true;
+        }
+        return /\.(pem|key|p12|pfx|jks|keystore|kdbx)$/i.test(base);
+      };
+      if (checkSecret(rawPath) || checkSecret(realRel)) {
+        return { error: 'Access to sensitive secret or credential file is denied by security policy.' };
+      }
+    }
     const raw = await fs.readFile(realFull, 'utf-8');
     const lines = raw.split('\n');
     if (startLine !== undefined) {

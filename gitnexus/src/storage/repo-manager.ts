@@ -322,7 +322,7 @@ export const cleanupOldKuzuFiles = async (
  * mirror-write hiccup never fails the caller's analyze run.
  */
 export const saveMeta = async (metaDir: string, meta: RepoMeta): Promise<void> => {
-  await fs.mkdir(metaDir, { recursive: true });
+  await fs.mkdir(metaDir, { recursive: true, mode: 0o700 });
   // Serialised once: `meta` carries a fileHashes entry per file, so on a large
   // repo this string is megabytes and both writes want the identical bytes.
   const json = JSON.stringify(meta, null, 2);
@@ -839,7 +839,7 @@ export const readRegistryStrictIfPresent = async (): Promise<RegistryEntry[] | u
  */
 const writeRegistry = async (entries: RegistryEntry[], attempts?: number): Promise<void> => {
   const dir = getGlobalDir();
-  await fs.mkdir(dir, { recursive: true });
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   await writeFileAtomic(
     getGlobalRegistryPath(),
     JSON.stringify(sanitizeEntries(entries), null, 2),
@@ -1876,7 +1876,7 @@ export const loadCLIConfig = async (): Promise<CLIConfig> => {
  */
 export const saveCLIConfig = async (config: CLIConfig): Promise<void> => {
   const dir = getGlobalDir();
-  await fs.mkdir(dir, { recursive: true });
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   const configPath = getGlobalConfigPath();
   await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
   // Restrict file permissions on Unix (config may contain API keys)

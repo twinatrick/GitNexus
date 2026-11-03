@@ -117,7 +117,11 @@ const CODING_AGENT_IDS = {
 const SUPPORTED_CODING_AGENTS = Object.values(CODING_AGENT_IDS);
 
 function selectedCodingAgents(values: string[] | string | undefined): Set<EditorId> | null {
-  if (values == null) return new Set(SUPPORTED_CODING_AGENTS);
+  if (values == null) {
+    return process.env.GITNEXUS_SETUP_ALL_EDITORS === '1'
+      ? new Set(SUPPORTED_CODING_AGENTS)
+      : new Set([CODING_AGENT_IDS.opencode]);
+  }
   const rawValues = Array.isArray(values) ? values : [values];
   const requested = rawValues
     .flatMap((value) => value.split(','))

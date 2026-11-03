@@ -1,7 +1,7 @@
 {
   "name": "gitnexus",
   "version": "1.6.12",
-  "description": "Graph-powered code intelligence for AI agents. Index any codebase, query via MCP or CLI. (Hardened OpenCode Security Fork)",
+  "description": "Graph-powered code intelligence for AI agents. Index any codebase, query via MCP or CLI. (Hardened OpenCode Security Fork) (Hardened OpenCode Security Fork)",
   "author": "Abhigyan Patwari",
   "license": "PolyForm-Noncommercial-1.0.0",
   "homepage": "https://github.com/abhigyanpatwari/GitNexus#readme",

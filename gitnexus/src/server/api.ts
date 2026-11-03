@@ -164,7 +164,7 @@ export const isAllowedOrigin = (origin: string | undefined): boolean => {
     origin === 'http://127.0.0.1' ||
     origin.startsWith('http://[::1]:') ||
     origin === 'http://[::1]' ||
-    isGitNexusVercelOrigin(origin)
+    false
   ) {
     return true;
   }
@@ -186,7 +186,7 @@ export const isAllowedOrigin = (origin: string | undefined): boolean => {
   // without a restart. The write guard in middleware.ts snapshots it instead.
   if (createPublicOriginMatcher(process.env[PUBLIC_ORIGIN_ENV])?.matches(parsed)) return true;
 
-  return isRfc1918PrivateIpv4(parsed.hostname);
+  return false;
 };
 
 type GraphStreamRecord =
@@ -827,6 +827,45 @@ export const handleFileRequest = async (
       res.status(403).json({ error: 'Path traversal denied' });
       return;
     }
+    if (process.env.GITNEXUS_ALLOW_SECRET_READS !== '1') {
+      const checkSecret = (rel: string): boolean => {
+        const norm = rel.replace(/\\/g, '/').toLowerCase();
+        const base = path.posix.basename(norm);
+        if (
+          base === '.env.example' ||
+          base === '.env.sample' ||
+          base === '.env.template' ||
+          base === '.env.defaults'
+        ) {
+          return false;
+        }
+        if (base === '.env' || base.startsWith('.env.')) return true;
+        if (
+          base === '.npmrc' ||
+          base === '.pypirc' ||
+          base === '.netrc' ||
+          base === 'id_rsa' ||
+          base === 'id_ed25519' ||
+          base === 'id_ecdsa' ||
+          base === 'id_dsa'
+        ) {
+          return true;
+        }
+        if (
+          norm === '.git/config' ||
+          norm === '.git/credentials' ||
+          norm.endsWith('/.git/config') ||
+          norm.endsWith('/.git/credentials')
+        ) {
+          return true;
+        }
+        return /\.(pem|key|p12|pfx|jks|keystore|kdbx)$/i.test(base);
+      };
+      if (checkSecret(filePath) || checkSecret(realRel)) {
+        res.status(403).json({ error: 'Access to sensitive secret or credential file is denied by security policy' });
+        return;
+      }
+    }
 
     const raw = await fs.readFile(realFull, 'utf-8');
 
@@ -910,6 +949,16 @@ export const handleQueryRequest = async (
   res: express.Response,
   resolveRepo: (repoName?: string) => Promise<{ storagePath: string } | undefined>,
 ): Promise<void> => {
+  if (
+    process.env.GITNEXUS_MCP_READ_ONLY !== '0' &&
+    process.env.GITNEXUS_MCP_READ_ONLY?.toLowerCase() !== 'false' &&
+    process.env.GITNEXUS_HTTP_ALLOW_CYPHER !== '1'
+  ) {
+    res.status(403).json({
+      error: 'Raw Cypher queries are disabled when read-only policy is active (set GITNEXUS_MCP_READ_ONLY=0 to enable)',
+    });
+    return;
+  }
   try {
     const cypher = req.body.cypher as string;
     if (!cypher) {
@@ -1477,12 +1526,12 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
   });
 
   // Execute Cypher query
-  app.post('/api/query', async (req, res) => {
+  app.post('/api/query', createRouteLimiter(), requireTrustedOrigin, async (req, res) => {
     await handleQueryRequest(req, res, resolveRepo);
   });
 
   // Search (supports mode: 'hybrid' | 'semantic' | 'bm25', and optional enrichment)
-  app.post('/api/search', async (req, res) => {
+  app.post('/api/search', createRouteLimiter(), requireTrustedOrigin, async (req, res) => {
     try {
       const query = (req.body.query ?? '').trim();
       if (!query) {
@@ -1891,6 +1940,22 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
         if (!repoUrl && !repoLocalPath) {
           res.status(400).json({ error: 'Provide "url" (git URL) or "path" (local path)' });
           return;
+        }
+        if (repoUrl && process.env.GITNEXUS_ALLOW_REMOTE_CLONE !== '1') {
+          res.status(403).json({
+            error:
+              'Remote URL cloning via HTTP API is disabled by security policy (set GITNEXUS_ALLOW_REMOTE_CLONE=1 to enable)',
+          });
+          return;
+        }
+        if (repoLocalPath && process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY !== '1') {
+          const relToCwd = path.relative(path.resolve(process.cwd()), path.resolve(repoLocalPath));
+          if (relToCwd === '..' || relToCwd.startsWith(`..${path.sep}`) || path.isAbsolute(relToCwd)) {
+            res.status(403).json({
+              error: 'Analyzing directories outside the active workspace is denied by security policy',
+            });
+            return;
+          }
         }
 
         // Branch: optional index-branch selector, validated with the same rules
