@@ -10,6 +10,8 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import { isSensitiveFile, secretReadsAllowed } from '../core/security/sensitive-files.js';
+import { isLexicallyInside } from '../core/security/path-containment.js';
 
 export interface GrepHit {
   filePath: string;
@@ -42,7 +44,18 @@ export async function scanGrepFiles(
   const regex = new RegExp(input.pattern, input.flags);
   const results: GrepHit[] = [];
   const repoRoot = path.resolve(input.repoRoot);
-  const safeRepoRoot = repoRoot.endsWith(path.sep) ? repoRoot : repoRoot + path.sep;
+
+  // SEC-001: canonicalize the repository root once. The lexical prefix check
+  // below is not enough on its own — a symlink inside the repo can point
+  // anywhere — so every candidate is resolved with `realpath` and re-checked
+  // against the canonical root before it is read.
+  let realRepoRoot: string;
+  try {
+    realRepoRoot = await fs.realpath(repoRoot);
+  } catch {
+    return { results, timedOut: false };
+  }
+  const allowSecrets = secretReadsAllowed();
 
   let timedOut = false;
   files: for (const filePath of input.filePaths) {
@@ -51,12 +64,25 @@ export async function scanGrepFiles(
       timedOut = true;
       break;
     }
+    // SEC-002: the grep surface must honour the same denylist as read_file.
+    if (!allowSecrets && isSensitiveFile(filePath)) continue;
+
     const fullPath = path.resolve(repoRoot, filePath);
-    if (!fullPath.startsWith(safeRepoRoot) && fullPath !== repoRoot) continue;
+    if (!isLexicallyInside(repoRoot, fullPath)) continue;
+
+    let realFullPath: string;
+    try {
+      realFullPath = await fs.realpath(fullPath);
+    } catch {
+      continue;
+    }
+    if (!isLexicallyInside(realRepoRoot, realFullPath)) continue;
+    // A benign-looking name that links to credential material is still a leak.
+    if (!allowSecrets && isSensitiveFile(realFullPath)) continue;
 
     let content: string;
     try {
-      content = await fs.readFile(fullPath, 'utf-8');
+      content = await fs.readFile(realFullPath, 'utf-8');
     } catch {
       continue;
     }

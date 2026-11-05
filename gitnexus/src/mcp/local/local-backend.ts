@@ -70,6 +70,7 @@ import {
   getGitRoot,
 } from '../../storage/git.js';
 import { realpathSync } from 'fs';
+import { isSensitiveFile, secretReadsAllowed } from '../../core/security/sensitive-files.js';
 import { parseGrepQuery, GREP_TIME_BUDGET_MS } from '../../server/grep-params.js';
 import { runGrepScanInWorker } from '../../server/grep-scan.js';
 import {
@@ -10378,6 +10379,9 @@ export class LocalBackend {
     if (realRel === '..' || realRel.startsWith(`..${path.sep}`) || path.isAbsolute(realRel)) {
       return { error: 'Path traversal denied.' };
     }
+    if (!secretReadsAllowed() && (isSensitiveFile(rawPath) || isSensitiveFile(realRel))) {
+      return { error: 'Access to sensitive secret or credential file is denied by security policy.' };
+    }
     const raw = await fs.readFile(realFull, 'utf-8');
     const lines = raw.split('\n');
     if (startLine !== undefined) {
@@ -10452,6 +10456,7 @@ export class LocalBackend {
     for (const row of fileRows) {
       const filePath: string = row.filePath || '';
       if (parsed.fileFilter && !filePath.toLowerCase().includes(parsed.fileFilter)) continue;
+      if (!secretReadsAllowed() && isSensitiveFile(filePath)) continue;
       filePaths.push(filePath);
     }
     // The shared scanner only checks a lexical prefix, then readFile follows

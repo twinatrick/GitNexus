@@ -12,6 +12,7 @@ import os from 'os';
 import { execFile, execFileSync } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
+import { ensurePrivateDirectory } from '../storage/private-dirs.js';
 import {
   parseTree,
   findNodeAtLocation,
@@ -114,17 +115,29 @@ const CODING_AGENT_IDS = {
   codex: 'codex',
   droid: 'droid',
 } as const satisfies Record<EditorId, EditorId>;
-const SUPPORTED_CODING_AGENTS = Object.values(CODING_AGENT_IDS);
+/**
+ * This hardened fork configures OpenCode only.
+ *
+ * The Claude Code / Codex / Cursor installers below are kept for the shared
+ * uninstall path, but they are no longer selectable: the fork does not ship
+ * their hook adapters or helper scripts, so registering one of those editors
+ * would leave it pointing at a hook that cannot run. Restricting the selection
+ * surface keeps `setup` unable to write such a configuration, including via the
+ * former `GITNEXUS_SETUP_ALL_EDITORS` escape hatch.
+ */
+const SUPPORTED_CODING_AGENTS = ['opencode'] as const;
 
 function selectedCodingAgents(values: string[] | string | undefined): Set<EditorId> | null {
-  if (values == null) return new Set(SUPPORTED_CODING_AGENTS);
+  if (values == null) {
+    return new Set([CODING_AGENT_IDS.opencode]);
+  }
   const rawValues = Array.isArray(values) ? values : [values];
   const requested = rawValues
     .flatMap((value) => value.split(','))
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
   const invalid = requested.filter(
-    (value): value is string => !SUPPORTED_CODING_AGENTS.includes(value as EditorId),
+    (value) => !(SUPPORTED_CODING_AGENTS as readonly string[]).includes(value),
   );
   if (requested.length === 0 || invalid.length > 0) {
     const detail =
@@ -135,7 +148,7 @@ function selectedCodingAgents(values: string[] | string | undefined): Set<Editor
     process.exitCode = 1;
     return null;
   }
-  return new Set(requested as EditorId[]);
+  return new Set([CODING_AGENT_IDS.opencode]);
 }
 
 /**
@@ -174,6 +187,28 @@ function resolveGitnexusBin(): string | null {
 }
 
 /**
+ * Air-gap mode (SEC-004). When enabled, setup refuses to emit any MCP command
+ * that could reach a package registry (`npx -y ...`). `npx` transparently
+ * downloads a missing package, so a machine that is supposed to be offline would
+ * still make outbound requests — disabling the update notifier is unrelated.
+ */
+const AIR_GAP_ENV = 'GITNEXUS_AIR_GAP';
+
+function airGapEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = env[AIR_GAP_ENV];
+  return value === '1' || value?.toLowerCase() === 'true';
+}
+
+function offlineBinaryError(): Error {
+  return new Error(
+    'GitNexus binary not found. Air-gap mode requires a local installation and never downloads packages. ' +
+      'Install GitNexus on this host from a vendored artifact (for example ' +
+      '`npm install -g ./gitnexus-<version>.tgz`) and re-run setup, or unset ' +
+      `${AIR_GAP_ENV} to allow the npx fallback.`,
+  );
+}
+
+/**
  * The MCP server entry for all editors.
  *
  * Prefers the globally-installed `gitnexus` binary (starts in ~1 s) over
@@ -183,13 +218,18 @@ function resolveGitnexusBin(): string | null {
  * persisted user config matches the installed package.
  *
  * Falls back to npx when the binary isn't on PATH — e.g. first-time
- * users who ran `npx gitnexus analyze` but haven't done `npm i -g`.
+ * users who ran `npx gitnexus analyze` but haven't done `npm i -g`. In air-gap
+ * mode there is no fallback: a missing binary is a hard error.
  */
 function getMcpEntry() {
   const bin = resolveGitnexusBin();
 
   if (bin) {
     return { command: bin, args: ['mcp'] };
+  }
+
+  if (airGapEnabled()) {
+    throw offlineBinaryError();
   }
 
   // Fallback: npx (works without a global install, but slow cold-start)
@@ -211,15 +251,23 @@ function getMcpEntry() {
  */
 function getOpenCodeMcpEntry() {
   const bin = resolveGitnexusBin();
+  const environment = {
+    GITNEXUS_MCP_READ_ONLY: '1',
+    GITNEXUS_NO_UPDATE_NOTIFIER: '1',
+  };
 
   if (bin) {
-    return { type: 'local', command: [bin, 'mcp'] };
+    return { type: 'local', command: [bin, 'mcp'], environment };
+  }
+
+  if (airGapEnabled()) {
+    throw offlineBinaryError();
   }
 
   if (process.platform === 'win32') {
-    return { type: 'local', command: ['cmd', '/c', 'npx', '-y', MCP_PINNED_REF, 'mcp'] };
+    return { type: 'local', command: ['cmd', '/c', 'npx', '-y', MCP_PINNED_REF, 'mcp'], environment };
   }
-  return { type: 'local', command: ['npx', '-y', MCP_PINNED_REF, 'mcp'] };
+  return { type: 'local', command: ['npx', '-y', MCP_PINNED_REF, 'mcp'], environment };
 }
 
 /**
@@ -1399,19 +1447,28 @@ async function installCodexSkills(result: SetupResult): Promise<void> {
 
 // ─── Main command ──────────────────────────────────────────────────
 
-export const setupCommand = async (options?: { codingAgent?: string[] | string }) => {
+export const setupCommand = async (options?: { codingAgent?: string[] | string; airGap?: boolean }) => {
+  if (options?.airGap) process.env[AIR_GAP_ENV] = '1';
   const explicitSelection = options?.codingAgent != null;
   const selected = selectedCodingAgents(options?.codingAgent);
   if (!selected) return;
+
+  // Air-gap preflight (SEC-004): fail before writing any editor config, so an
+  // aborted setup can never leave an editor pointing at an npx fallback.
+  if (airGapEnabled() && !resolveGitnexusBin()) {
+    process.stderr.write(`  ${offlineBinaryError().message}\n`);
+    process.exitCode = 1;
+    return;
+  }
 
   console.log('');
   console.log('  GitNexus Setup');
   console.log('  ==============');
   console.log('');
 
-  // Ensure global directory exists
+  // Ensure global directory exists (SEC-006: re-assert 0700 on old installs)
   const globalDir = getGlobalDir();
-  await fs.mkdir(globalDir, { recursive: true });
+  await ensurePrivateDirectory(globalDir);
 
   const result: SetupResult = {
     configured: [],

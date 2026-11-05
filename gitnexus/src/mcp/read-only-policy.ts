@@ -35,8 +35,8 @@ const MCP_READ_ONLY_ALIASES = new Set(['search', 'explore', 'overview']);
 
 export function resolveMcpReadOnlyMode(env: NodeJS.ProcessEnv = process.env): boolean {
   const value = env.GITNEXUS_MCP_READ_ONLY?.trim();
-  if (value === undefined || value === '' || value === '0') return false;
-  if (value === '1') return true;
+  if (value === undefined || value === '' || value === '1') return true;
+  if (value === '0') return false;
   throw new Error('GITNEXUS_MCP_READ_ONLY must be 0 or 1.');
 }
 

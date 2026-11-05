@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { realpathSync } from 'node:fs';
 import type { LocalBackend, McpToolCallContext, RepoListing } from './local/local-backend.js';
 import { parseListReposPagination } from './local/local-backend.js';
 import { scrubGroupDescription } from './read-only-policy.js';
@@ -53,7 +54,16 @@ function parseRepositoryPolicy(env: NodeJS.ProcessEnv): RawRepositoryPolicy {
 
 function normalizedPath(value: string): string {
   const resolved = path.resolve(value);
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  // SEC-003: compare canonical paths. A symlinked checkout must not masquerade
+  // as a different repository, and the same location spelled two ways must not
+  // dodge the allowlist. Missing paths fall back to the lexical form.
+  let canonical = resolved;
+  try {
+    canonical = realpathSync.native(resolved);
+  } catch {
+    canonical = resolved;
+  }
+  return process.platform === 'win32' ? canonical.toLowerCase() : canonical;
 }
 
 function isAbsolutePath(value: string): boolean {
@@ -150,6 +160,10 @@ export class McpRepositoryPolicy {
     if (this.restricted && this.allowed.length > 1) {
       throw new Error('Specify an explicit repo because multiple repositories are allowed.');
     }
+    // SEC-003: a restricted policy with nothing in scope must fail closed. This
+    // is what a CWD outside every indexed root produces; returning `undefined`
+    // let the call fall through to unrestricted backend behaviour.
+    if (this.restricted) throw unavailableRepositoryError();
     return undefined;
   }
 
@@ -443,7 +457,25 @@ export async function createMcpRepositoryPolicy(
 ): Promise<McpRepositoryPolicy> {
   const raw = parseRepositoryPolicy(env);
   if (!raw.allowed && !raw.defaultRepo) {
-    return McpRepositoryPolicy.unrestricted();
+    if (env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY === '1') {
+      return McpRepositoryPolicy.unrestricted();
+    }
+    const registry = (await backend.listRepos()).map((repo) => ({
+      name: repo.name,
+      path: repo.path,
+      pathKey: normalizedPath(repo.path),
+    }));
+    const cwdKey = normalizedPath(env.GITNEXUS_WORKSPACE_ROOT || process.cwd());
+    // SEC-003: only the repository rooted exactly at the CWD is implied. The
+    // previous ancestor/descendant prefix match handed a server started in
+    // `/workspace/project-a` access to `/workspace` (and everything below
+    // `/workspace` when started there), which is broader than least privilege.
+    const cwdScoped = registry.filter((repo) => repo.pathKey === cwdKey);
+    return new McpRepositoryPolicy(
+      registry,
+      cwdScoped,
+      cwdScoped.length === 1 ? cwdScoped[0] : undefined,
+    );
   }
 
   const registry = (await backend.listRepos()).map((repo) => ({

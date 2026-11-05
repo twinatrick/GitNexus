@@ -25,6 +25,7 @@ import {
 } from './git.js';
 import { stripWindowsLongPathPrefix } from '../lib/utils.js';
 import { writeFileAtomic } from './fs-atomic.js';
+import { ensurePrivateDirectory } from './private-dirs.js';
 import { getGlobalDir } from './global-dir.js';
 import { logger } from '../core/logger.js';
 import { mapPool } from './map-pool.js';
@@ -322,7 +323,9 @@ export const cleanupOldKuzuFiles = async (
  * mirror-write hiccup never fails the caller's analyze run.
  */
 export const saveMeta = async (metaDir: string, meta: RepoMeta): Promise<void> => {
-  await fs.mkdir(metaDir, { recursive: true });
+  // SEC-006: `mkdir({mode})` only applies at creation time, so an install made
+  // by an older version would keep a permissive mode forever.
+  await ensurePrivateDirectory(metaDir);
   // Serialised once: `meta` carries a fileHashes entry per file, so on a large
   // repo this string is megabytes and both writes want the identical bytes.
   const json = JSON.stringify(meta, null, 2);
@@ -839,7 +842,8 @@ export const readRegistryStrictIfPresent = async (): Promise<RegistryEntry[] | u
  */
 const writeRegistry = async (entries: RegistryEntry[], attempts?: number): Promise<void> => {
   const dir = getGlobalDir();
-  await fs.mkdir(dir, { recursive: true });
+  // SEC-006: re-assert 0700 on pre-existing installs, not just new ones.
+  await ensurePrivateDirectory(dir);
   await writeFileAtomic(
     getGlobalRegistryPath(),
     JSON.stringify(sanitizeEntries(entries), null, 2),
@@ -1876,7 +1880,8 @@ export const loadCLIConfig = async (): Promise<CLIConfig> => {
  */
 export const saveCLIConfig = async (config: CLIConfig): Promise<void> => {
   const dir = getGlobalDir();
-  await fs.mkdir(dir, { recursive: true });
+  // SEC-006: tighten an existing global dir before writing credentials into it.
+  await ensurePrivateDirectory(dir);
   const configPath = getGlobalConfigPath();
   await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
   // Restrict file permissions on Unix (config may contain API keys)

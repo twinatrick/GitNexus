@@ -77,9 +77,11 @@ function debugLog(message) {
  */
 function extractAugmentContext(stderr) {
   const output = (stderr || '').trim();
+  const untrustedIdx = output.indexOf('<untrusted_repo_metadata');
+  if (untrustedIdx !== -1) return output.slice(untrustedIdx).trim();
   const marker = output.indexOf(MARKER);
   if (marker === -1) return '';
-  return output.slice(marker).trim();
+  return `<untrusted_repo_metadata source="gitnexus-augment">\n${output.slice(marker).trim()}\n</untrusted_repo_metadata>`;
 }
 
 /**

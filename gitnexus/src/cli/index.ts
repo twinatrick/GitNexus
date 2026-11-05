@@ -36,6 +36,10 @@ program
     'Configure only these coding agents (comma-separated or repeatable)',
     collectCodingAgents,
   )
+  .option(
+    '--air-gap',
+    'Require a locally installed gitnexus binary; never fall back to npx/npm downloads',
+  )
   .action(createLazyAction(() => import('./setup.js'), 'setupCommand'));
 
 program

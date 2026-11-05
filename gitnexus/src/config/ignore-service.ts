@@ -11,6 +11,11 @@ import {
 import fs from 'fs/promises';
 import nodePath from 'path';
 import type { Path } from 'path-scurry';
+import {
+  isSensitiveDirectory,
+  isSensitiveFile,
+  secretReadsAllowed,
+} from '../core/security/sensitive-files.js';
 import { readRepoControlFile } from './repo-control-file.js';
 import { logger } from '../core/logger.js';
 import { getCoreExcludesFilePath, getGitInfoExcludePath } from '../storage/git.js';
@@ -331,6 +336,9 @@ export const shouldIgnorePath = (filePath: string): boolean => {
   const fileName = parts[parts.length - 1];
   const fileNameLower = fileName.toLowerCase();
 
+  // SEC-002: credential material is never indexed, regardless of extensions.
+  if (!secretReadsAllowed() && isSensitiveFile(normalizedPath)) return true;
+
   if (parts.length > 0 && isRootArtifactDirectory(parts[0], parts[0])) {
     return true;
   }
@@ -492,6 +500,8 @@ export const createWatchIgnorePredicate = async (
     const rel = nodePath.relative(repoRoot, absolute).replace(/\\/g, '/');
     if (!rel) return false;
     if (rel === '..' || rel.startsWith('../') || nodePath.isAbsolute(rel)) return true;
+    // SEC-002: the watcher must not re-index material the readers deny.
+    if (!secretReadsAllowed() && (isSensitiveDirectory(rel) || isSensitiveFile(rel))) return true;
 
     if (ig && hasExplicitUnignore(ig, rel) && !ig.ignores(isDirectory ? `${rel}/` : rel)) {
       return false;
@@ -726,6 +736,9 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
       // native separators on Windows when called through glob.
       const rel = p.relative().replace(/\\/g, '/');
       if (!rel) return false;
+      // SEC-002: credential material stays excluded even when `.gitnexusignore`
+      // adds a negation for it. Only the explicit opt-in lifts this.
+      if (!secretReadsAllowed() && isSensitiveFile(rel)) return true;
       // Nested .gitignore files below the root (#2675). .gitnexusignore
       // comes first, then the deepest nested .gitignore, which outranks the
       // root .gitignore as in git. The nested matcher preserves independent
@@ -762,6 +775,8 @@ export const createIgnoreFilter = async (repoPath: string, options?: IgnoreOptio
       // list check below is defense-in-depth — do not remove `dot: false`
       // assuming this covers it.
       const rel = p.relative().replace(/\\/g, '/');
+      // SEC-002: never descend into credential directories, negations included.
+      if (!secretReadsAllowed() && isSensitiveDirectory(rel)) return true;
       // Nested .gitignore files below the root (#2675), same precedence as in
       // `ignored` above.
       if (nestedIgnores && rel) {
