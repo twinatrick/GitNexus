@@ -1448,7 +1448,7 @@ export const setupCommand = async (options?: { codingAgent?: string[] | string; 
   // Air-gap preflight (SEC-004): fail before writing any editor config, so an
   // aborted setup can never leave an editor pointing at an npx fallback.
   if (airGapEnabled() && !resolveGitnexusBin()) {
-    console.error(`  ${offlineBinaryError().message}`);
+    process.stderr.write(`  ${offlineBinaryError().message}\n`);
     process.exitCode = 1;
     return;
   }
