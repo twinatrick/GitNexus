@@ -83,6 +83,8 @@ import {
 import { assertString, BadRequestError, createRouteLimiter } from './validation.js';
 import { parseGrepQuery, GREP_TIME_BUDGET_MS } from './grep-params.js';
 import { runGrepScanInWorker } from './grep-scan.js';
+import { isSensitiveFile, secretReadsAllowed } from '../core/security/sensitive-files.js';
+import { PathContainmentError, resolveContainedPath } from '../core/security/path-containment.js';
 import {
   analyzeCloneOptions,
   extractWebRepoName,
@@ -827,44 +829,9 @@ export const handleFileRequest = async (
       res.status(403).json({ error: 'Path traversal denied' });
       return;
     }
-    if (process.env.GITNEXUS_ALLOW_SECRET_READS !== '1') {
-      const checkSecret = (rel: string): boolean => {
-        const norm = rel.replace(/\\/g, '/').toLowerCase();
-        const base = path.posix.basename(norm);
-        if (
-          base === '.env.example' ||
-          base === '.env.sample' ||
-          base === '.env.template' ||
-          base === '.env.defaults'
-        ) {
-          return false;
-        }
-        if (base === '.env' || base.startsWith('.env.')) return true;
-        if (
-          base === '.npmrc' ||
-          base === '.pypirc' ||
-          base === '.netrc' ||
-          base === 'id_rsa' ||
-          base === 'id_ed25519' ||
-          base === 'id_ecdsa' ||
-          base === 'id_dsa'
-        ) {
-          return true;
-        }
-        if (
-          norm === '.git/config' ||
-          norm === '.git/credentials' ||
-          norm.endsWith('/.git/config') ||
-          norm.endsWith('/.git/credentials')
-        ) {
-          return true;
-        }
-        return /\.(pem|key|p12|pfx|jks|keystore|kdbx)$/i.test(base);
-      };
-      if (checkSecret(filePath) || checkSecret(realRel)) {
-        res.status(403).json({ error: 'Access to sensitive secret or credential file is denied by security policy' });
-        return;
-      }
+    if (!secretReadsAllowed() && (isSensitiveFile(filePath) || isSensitiveFile(realRel))) {
+      res.status(403).json({ error: 'Access to sensitive secret or credential file is denied by security policy' });
+      return;
     }
 
     const raw = await fs.readFile(realFull, 'utf-8');
@@ -1032,6 +999,17 @@ export function validateAnalyzeToken(
     return { status: 400, error: '"token" is only supported for github.com URLs' };
   return null;
 }
+
+/**
+ * SEC-001: canonicalize an Analyze target and require it to stay inside the
+ * workspace root. Symlinks (and Windows junctions) are resolved on both sides,
+ * so an in-workspace link that points outside the workspace is rejected instead
+ * of silently widening the serving boundary.
+ */
+export const resolveAnalyzeRepoPath = async (
+  repoLocalPath: string,
+  workspaceRoot: string = process.env.GITNEXUS_WORKSPACE_ROOT || process.cwd(),
+): Promise<string> => resolveContainedPath(workspaceRoot, repoLocalPath);
 
 export const createServer = async (port: number, host: string = '127.0.0.1') => {
   // Refuse a public-origin config before anything is opened or bound: `serve`
@@ -1764,6 +1742,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
       for (const row of fileRows) {
         const filePath: string = row.filePath || '';
         if (fileFilter && !filePath.toLowerCase().includes(fileFilter)) continue;
+        if (!secretReadsAllowed() && isSensitiveFile(filePath)) continue;
         filePaths.push(filePath);
       }
 
@@ -1948,13 +1927,28 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
           });
           return;
         }
+        // SEC-001: symlink-aware containment. A lexical `path.relative` check is
+        // bypassed by an in-workspace symlink that points outside it, so the
+        // boundary must be evaluated on canonical (`realpath`) forms of both the
+        // workspace root and the requested path. TOCTOU is handled downstream:
+        // the walker re-resolves every entry while traversing.
+        let analyzeRepoPath = repoLocalPath;
         if (repoLocalPath && process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY !== '1') {
-          const relToCwd = path.relative(path.resolve(process.cwd()), path.resolve(repoLocalPath));
-          if (relToCwd === '..' || relToCwd.startsWith(`..${path.sep}`) || path.isAbsolute(relToCwd)) {
-            res.status(403).json({
-              error: 'Analyzing directories outside the active workspace is denied by security policy',
-            });
-            return;
+          try {
+            analyzeRepoPath = await resolveAnalyzeRepoPath(repoLocalPath);
+          } catch (err) {
+            if (err instanceof PathContainmentError) {
+              res.status(403).json({
+                error: 'Analyzing directories outside the active workspace is denied by security policy',
+              });
+              return;
+            }
+            const code = (err as NodeJS.ErrnoException | undefined)?.code;
+            if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP') {
+              res.status(400).json({ error: 'Analyze path does not exist or cannot be resolved' });
+              return;
+            }
+            throw err;
           }
         }
 
@@ -2006,7 +2000,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
 
         const job = jobManager.createJob({
           repoUrl,
-          repoPath: repoLocalPath,
+          repoPath: analyzeRepoPath,
           branch: analyzeBranch,
         });
 

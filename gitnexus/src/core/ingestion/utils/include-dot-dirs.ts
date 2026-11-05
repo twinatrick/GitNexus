@@ -2,48 +2,15 @@ import { logger } from '../../logger.js';
 import type { IgnoreLike, Path } from 'glob';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { isSensitiveDirectory, isSensitiveFile } from '../../security/sensitive-files.js';
 
 /**
- * Directory names that must never be indexed, even when listed. These hold
- * version-control internals or credential stores, not source.
+ * Version-control internals. These are refused even when listed: indexing them
+ * is noise and can surface commit metadata. Credential directories and files are
+ * handled by the shared sensitive-file policy so the indexer, MCP readers and
+ * the HTTP API agree on one definition of "secret" (SEC-002).
  */
-const REFUSED_DOT_DIRS = new Set([
-  '.git',
-  '.svn',
-  '.hg',
-  '.bzr',
-  '.ssh',
-  '.aws',
-  '.azure',
-  '.kube',
-  '.gnupg',
-  '.docker',
-  '.npm',
-  '.pki',
-  '.password-store',
-  '.vault',
-]);
-
-const CREDENTIAL_CONFIG_DIRS = new Set(['gcloud', 'gh', 'hub', 'aws', 'azure', 'sops', 'op']);
-const CREDENTIAL_FILES = new Set([
-  'credentials',
-  'credentials.json',
-  'credentials.db',
-  'application_default_credentials.json',
-  'access_tokens.db',
-  'accesstokens.json',
-  'auth.json',
-  'tokens.json',
-  'secrets.json',
-  'secrets.yaml',
-  'secrets.yml',
-  'secrets.toml',
-  'id_rsa',
-  'id_dsa',
-  'id_ecdsa',
-  'id_ed25519',
-]);
-const KEY_FILE = /\.(?:pem|key|crt|cer|p12|pfx)$/i;
+const REFUSED_DOT_DIRS = new Set(['.git', '.svn', '.hg', '.bzr']);
 
 /** A single path segment: a leading "." followed by letters, digits, ".", "_" or "-". */
 const DOT_DIR_NAME = /^\.[A-Za-z0-9._-]+$/;
@@ -78,7 +45,7 @@ export const normalizeIncludeDotDirs = (entries: readonly string[]): string[] =>
       );
       continue;
     }
-    if (REFUSED_DOT_DIRS.has(entry.toLowerCase())) {
+    if (REFUSED_DOT_DIRS.has(entry.toLowerCase()) || isSensitiveDirectory(entry)) {
       warnOnce(
         `refused:${entry}`,
         `  GITNEXUS_INCLUDE_DOT_DIRS cannot include version-control or credential directory "${entry}" — ignoring it`,
@@ -124,10 +91,8 @@ export const dotDirectoryIgnoreFilter = (base: IgnoreLike): IgnoreLike => {
     const parts = entry.relative().replace(/\\/g, '/').toLowerCase().split('/');
     if (!parts.some((part) => part.startsWith('.'))) return false;
     if (parts.some((part) => REFUSED_DOT_DIRS.has(part))) return true;
-    if (parts.some((part, i) => part === '.config' && CREDENTIAL_CONFIG_DIRS.has(parts[i + 1])))
-      return true;
-    const name = parts[parts.length - 1];
-    if (CREDENTIAL_FILES.has(name) || KEY_FILE.test(name)) return true;
+    const relativePath = parts.join('/');
+    if (isSensitiveDirectory(relativePath) || isSensitiveFile(relativePath)) return true;
     // Prune known links here. Glob can emit descendants before its cached
     // parent type is known; filterDotDirectorySymlinks checks the filesystem
     // after enumeration, before any metadata callback or content reader.
