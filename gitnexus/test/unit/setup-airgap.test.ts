@@ -95,7 +95,7 @@ describe('setup --air-gap', () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const { setupCommand } = await setup();
 
-    await setupCommand({ codingAgent: 'claude' });
+    await setupCommand({ codingAgent: 'opencode' });
 
     expect(process.exitCode).toBe(1);
     expect(stderr.mock.calls.map((call) => String(call[0])).join('\n')).toMatch(
@@ -108,17 +108,17 @@ describe('setup --air-gap', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const { setupCommand } = await setup();
 
-    await setupCommand({ codingAgent: 'claude' });
+    await setupCommand({ codingAgent: 'opencode' });
 
     expect(process.exitCode).toBe(1);
   });
 
   it('keeps the normal (non-air-gap) npx fallback available', async () => {
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    await fs.mkdir(path.join(tempHome, '.claude'), { recursive: true });
+    await fs.mkdir(path.join(tempHome, '.config', 'opencode'), { recursive: true });
     const { setupCommand } = await setup();
 
-    await setupCommand({ codingAgent: 'claude' });
+    await setupCommand({ codingAgent: 'opencode' });
 
     expect(process.exitCode).toBeUndefined();
     expect(stderr).not.toHaveBeenCalled();
@@ -129,7 +129,7 @@ describe('setup --air-gap', () => {
     const jsonFiles = relativeFiles
       .filter((file) => file.endsWith('.json'))
       .map((file) => path.join(tempHome, file));
-    let entry: { command?: string; args?: string[] } | undefined;
+    let entry: { command?: string | string[]; args?: string[] } | undefined;
     for (const file of jsonFiles) {
       const parsed = JSON.parse(await fs.readFile(file, 'utf-8'));
       const candidate = parsed?.mcpServers?.gitnexus ?? parsed?.mcp?.gitnexus;
@@ -139,9 +139,13 @@ describe('setup --air-gap', () => {
       }
     }
     expect(entry).toBeDefined();
-    // Non-win32 emits `npx` as the command; win32 wraps it as `cmd /c npx ...`.
-    const commandLine = [entry?.command, ...(entry?.args ?? [])].join(' ');
+    // OpenCode stores the whole argv in `command`; Claude-style targets split it
+    // into `command` + `args`, and win32 wraps it as `cmd /c npx ...`.
+    const parts = Array.isArray(entry?.command)
+      ? entry.command
+      : [entry?.command, ...(entry?.args ?? [])];
+    const commandLine = parts.join(' ');
     expect(commandLine).toMatch(/npx/i);
-    expect(entry?.args).toContain('-y');
+    expect(parts).toContain('-y');
   });
 });

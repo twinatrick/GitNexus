@@ -115,13 +115,21 @@ const CODING_AGENT_IDS = {
   codex: 'codex',
   droid: 'droid',
 } as const satisfies Record<EditorId, EditorId>;
-const SUPPORTED_CODING_AGENTS = Object.values(CODING_AGENT_IDS);
+/**
+ * This hardened fork configures OpenCode only.
+ *
+ * The Claude Code / Codex / Cursor installers below are kept for the shared
+ * uninstall path, but they are no longer selectable: the fork does not ship
+ * their hook adapters or helper scripts, so registering one of those editors
+ * would leave it pointing at a hook that cannot run. Restricting the selection
+ * surface keeps `setup` unable to write such a configuration, including via the
+ * former `GITNEXUS_SETUP_ALL_EDITORS` escape hatch.
+ */
+const SUPPORTED_CODING_AGENTS = ['opencode'] as const;
 
 function selectedCodingAgents(values: string[] | string | undefined): Set<EditorId> | null {
   if (values == null) {
-    return process.env.GITNEXUS_SETUP_ALL_EDITORS === '1'
-      ? new Set(SUPPORTED_CODING_AGENTS)
-      : new Set([CODING_AGENT_IDS.opencode]);
+    return new Set([CODING_AGENT_IDS.opencode]);
   }
   const rawValues = Array.isArray(values) ? values : [values];
   const requested = rawValues
@@ -129,7 +137,7 @@ function selectedCodingAgents(values: string[] | string | undefined): Set<Editor
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
   const invalid = requested.filter(
-    (value): value is string => !SUPPORTED_CODING_AGENTS.includes(value as EditorId),
+    (value) => !(SUPPORTED_CODING_AGENTS as readonly string[]).includes(value),
   );
   if (requested.length === 0 || invalid.length > 0) {
     const detail =
@@ -140,7 +148,7 @@ function selectedCodingAgents(values: string[] | string | undefined): Set<Editor
     process.exitCode = 1;
     return null;
   }
-  return new Set(requested as EditorId[]);
+  return new Set([CODING_AGENT_IDS.opencode]);
 }
 
 /**
