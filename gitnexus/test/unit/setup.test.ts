@@ -29,7 +29,8 @@ const errLines = () =>
     .join('');
 
 // `which`/`where gitnexus` always fails, so the generated MCP entry takes the
-// documented npx fallback (air-gap refusal is covered in setup-airgap.test.ts).
+// npx fallback — which is opt-in only, so these tests enable it explicitly
+// (the default refusal and air-gap refusal are covered in setup-airgap.test.ts).
 const execFileSyncMock = vi.fn((): string => {
   throw new Error('not found');
 });
@@ -64,6 +65,7 @@ beforeEach(async () => {
   process.env.USERPROFILE = tempHome;
   delete process.env.GITNEXUS_AIR_GAP;
   delete process.env.GITNEXUS_SETUP_ALL_EDITORS;
+  process.env.GITNEXUS_ALLOW_NPX_FALLBACK = '1';
   process.exitCode = undefined;
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -78,6 +80,7 @@ afterEach(async () => {
   else process.env.USERPROFILE = originalUserProfile;
   delete process.env.GITNEXUS_AIR_GAP;
   delete process.env.GITNEXUS_SETUP_ALL_EDITORS;
+  delete process.env.GITNEXUS_ALLOW_NPX_FALLBACK;
   vi.restoreAllMocks();
   await fs.rm(tempHome, { recursive: true, force: true });
 });
@@ -101,7 +104,7 @@ describe('setup (OpenCode-only policy)', () => {
     await expect(fs.stat(opencodePluginPath())).resolves.toBeTruthy();
   });
 
-  it('writes the npx fallback entry when no local binary is installed', async () => {
+  it('writes the npx fallback entry when it is explicitly enabled', async () => {
     await withOpencodeInstalled();
     const { setupCommand } = await importSetup();
 

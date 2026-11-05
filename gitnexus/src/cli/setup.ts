@@ -209,6 +209,30 @@ function offlineBinaryError(): Error {
 }
 
 /**
+ * SEC-004 (opt-in half). `npx -y gitnexus@<version>` is a package-registry
+ * download, so it must never be the silent default: a user who simply has not
+ * run `npm i -g` would otherwise get an editor config that reaches the network
+ * on every MCP start. This mirrors the OpenCode plugin's `allowNpxFallback`
+ * (default off) so both entry points behave the same way.
+ */
+const NPX_FALLBACK_ENV = 'GITNEXUS_ALLOW_NPX_FALLBACK';
+
+function npxFallbackAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  const value = env[NPX_FALLBACK_ENV];
+  return value === '1' || value?.toLowerCase() === 'true';
+}
+
+function npxOptInError(): Error {
+  return new Error(
+    'GitNexus binary not found and the npx fallback is disabled by default because ' +
+      '`npx -y` downloads the package from the npm registry. Install GitNexus ' +
+      `locally (\`npm install -g gitnexus@${PKG_VERSION}\`, or from a vendored tarball ` +
+      'for offline hosts) and re-run setup, or set ' +
+      `${NPX_FALLBACK_ENV}=1 to explicitly allow the network install.`,
+  );
+}
+
+/**
  * The MCP server entry for all editors.
  *
  * Prefers the globally-installed `gitnexus` binary (starts in ~1 s) over
@@ -217,9 +241,10 @@ function offlineBinaryError(): Error {
  * version is read from gitnexus/package.json#version at module load so the
  * persisted user config matches the installed package.
  *
- * Falls back to npx when the binary isn't on PATH — e.g. first-time
- * users who ran `npx gitnexus analyze` but haven't done `npm i -g`. In air-gap
- * mode there is no fallback: a missing binary is a hard error.
+ * When the binary isn't on PATH — e.g. first-time users who ran
+ * `npx gitnexus analyze` but haven't done `npm i -g` — this throws unless the
+ * caller explicitly opts into the network install with
+ * `GITNEXUS_ALLOW_NPX_FALLBACK=1`. Air-gap mode never falls back at all.
  */
 function getMcpEntry() {
   const bin = resolveGitnexusBin();
@@ -230,6 +255,11 @@ function getMcpEntry() {
 
   if (airGapEnabled()) {
     throw offlineBinaryError();
+  }
+
+  // SEC-004: npx is a network install, so it is opt-in only.
+  if (!npxFallbackAllowed()) {
+    throw npxOptInError();
   }
 
   // Fallback: npx (works without a global install, but slow cold-start)
@@ -262,6 +292,11 @@ function getOpenCodeMcpEntry() {
 
   if (airGapEnabled()) {
     throw offlineBinaryError();
+  }
+
+  // SEC-004: npx is a network install, so it is opt-in only.
+  if (!npxFallbackAllowed()) {
+    throw npxOptInError();
   }
 
   if (process.platform === 'win32') {
@@ -1453,10 +1488,12 @@ export const setupCommand = async (options?: { codingAgent?: string[] | string; 
   const selected = selectedCodingAgents(options?.codingAgent);
   if (!selected) return;
 
-  // Air-gap preflight (SEC-004): fail before writing any editor config, so an
-  // aborted setup can never leave an editor pointing at an npx fallback.
-  if (airGapEnabled() && !resolveGitnexusBin()) {
-    process.stderr.write(`  ${offlineBinaryError().message}\n`);
+  // Network-install preflight (SEC-004): fail before writing any editor config,
+  // so an aborted setup can never leave an editor pointing at an npx fallback.
+  // Covers both air-gap mode and the default (no explicit npx opt-in) case.
+  if (!resolveGitnexusBin() && (airGapEnabled() || !npxFallbackAllowed())) {
+    const error = airGapEnabled() ? offlineBinaryError() : npxOptInError();
+    process.stderr.write(`  ${error.message}\n`);
     process.exitCode = 1;
     return;
   }

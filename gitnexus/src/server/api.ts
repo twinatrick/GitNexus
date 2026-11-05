@@ -84,6 +84,7 @@ import { assertString, BadRequestError, createRouteLimiter } from './validation.
 import { parseGrepQuery, GREP_TIME_BUDGET_MS } from './grep-params.js';
 import { runGrepScanInWorker } from './grep-scan.js';
 import { isSensitiveFile, secretReadsAllowed } from '../core/security/sensitive-files.js';
+import { contentAllowedForPath } from '../core/security/content-policy.js';
 import { PathContainmentError, resolveContainedPath } from '../core/security/path-containment.js';
 import {
   analyzeCloneOptions,
@@ -493,7 +494,7 @@ export const getNodeQuery = (table: string, includeContent: boolean): string => 
     : `MATCH (n:${tableLabel}) RETURN n.id AS id, n.name AS name, n.filePath AS filePath, n.startLine AS startLine, n.endLine AS endLine`;
 };
 
-const mapGraphNodeRow = (table: string, row: any, includeContent: boolean): GraphNode => ({
+export const mapGraphNodeRow = (table: string, row: any, includeContent: boolean): GraphNode => ({
   id: row.id ?? row[0],
   label: table as GraphNode['label'],
   properties: {
@@ -508,7 +509,13 @@ const mapGraphNodeRow = (table: string, row: any, includeContent: boolean): Grap
     startLine: row.startLine,
     endLine: row.endLine,
     text: row.text,
-    content: includeContent ? row.content : undefined,
+    // SEC-002: the graph serves the `content` column the indexer persisted, so
+    // this is a file-bytes surface even though no file is opened here. Older
+    // indexes (and ones built with GITNEXUS_ALLOW_SECRET_READS=1) still hold
+    // the rows; filtering by `filePath` is what keeps `.env` out of both
+    // `/api/graph` and its NDJSON stream.
+    content:
+      includeContent && contentAllowedForPath(row.filePath ?? row[2]) ? row.content : undefined,
     responseKeys: row.responseKeys,
     errorKeys: row.errorKeys,
     middleware: row.middleware,
@@ -2025,7 +2032,17 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
 
         // Start async work — don't await
         (async () => {
-          let targetPath = repoLocalPath;
+          // SEC-001: hand the worker the CANONICAL path (`analyzeRepoPath`),
+          // never the raw request string. `analyzeRepoPath` is the realpath of
+          // the requested directory, so a symlink swapped in between the
+          // containment check above and this fork cannot redirect traversal:
+          // the canonical string names the resolved directory, not the link.
+          // Passing `repoLocalPath` here re-opened exactly that TOCTOU window —
+          // the walker would have re-resolved the (now hostile) link and
+          // treated the out-of-tree target as the repo root. For clone jobs
+          // `analyzeRepoPath` is undefined and the branch below assigns
+          // `getCloneDir(...)`, so the clone flow is unaffected.
+          let targetPath = analyzeRepoPath;
           try {
             // Clone if URL provided
             if (repoUrl && !repoLocalPath) {

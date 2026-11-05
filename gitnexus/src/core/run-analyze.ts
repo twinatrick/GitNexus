@@ -187,6 +187,7 @@ import {
   type ContentRetention,
   type RepoMeta,
 } from '../storage/repo-manager.js';
+import { SECURITY_CONTENT_POLICY_VERSION } from './security/content-policy.js';
 import {
   ANALYZE_FORCE_STORAGE_REQUIREMENTS,
   ANALYZE_STORAGE_REQUIREMENTS,
@@ -5359,6 +5360,9 @@ async function runFullAnalysisInner(
       indexedAt: new Date().toISOString(),
       contentRetention,
       contentRetentionSchemaVersion: CONTENT_RETENTION_SCHEMA_VERSION,
+      // SEC-002: record the exclusion policy this index was built under so a
+      // reader can tell a current index from one that still holds `.env` rows.
+      securityPolicyVersion: SECURITY_CONTENT_POLICY_VERSION,
       ftsProfile,
       runnerIdentity,
       // Persist only normalized repo-relative exclusions, never absolute paths

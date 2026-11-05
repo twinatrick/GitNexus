@@ -25,7 +25,7 @@ import {
 } from './git.js';
 import { stripWindowsLongPathPrefix } from '../lib/utils.js';
 import { writeFileAtomic } from './fs-atomic.js';
-import { ensurePrivateDirectory } from './private-dirs.js';
+import { ensurePrivateDirectory, ensurePrivateFile } from './private-dirs.js';
 import { getGlobalDir } from './global-dir.js';
 import { logger } from '../core/logger.js';
 import { mapPool } from './map-pool.js';
@@ -849,6 +849,10 @@ const writeRegistry = async (entries: RegistryEntry[], attempts?: number): Promi
     JSON.stringify(sanitizeEntries(entries), null, 2),
     attempts,
   );
+  // SEC-006: the registry lists every indexed repo and may carry remote URLs,
+  // so an install upgraded from an older release must not keep a group/world
+  // readable copy of the file it just rewrote.
+  await ensurePrivateFile(getGlobalRegistryPath());
 };
 
 /**
@@ -1884,14 +1888,10 @@ export const saveCLIConfig = async (config: CLIConfig): Promise<void> => {
   await ensurePrivateDirectory(dir);
   const configPath = getGlobalConfigPath();
   await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
-  // Restrict file permissions on Unix (config may contain API keys)
-  if (process.platform !== 'win32') {
-    try {
-      await fs.chmod(configPath, 0o600);
-    } catch {
-      /* best-effort */
-    }
-  }
+  // SEC-006: the config may contain API keys. `ensurePrivateFile` covers the
+  // pre-existing-file case (the old inline chmod only ran on the Unix path and
+  // only when the file happened to be written by this call).
+  await ensurePrivateFile(configPath);
 };
 
 // ─── Sibling-clone detection ─────────────────────────────────────────────

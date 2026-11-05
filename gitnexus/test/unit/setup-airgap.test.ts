@@ -45,6 +45,7 @@ beforeEach(async () => {
   process.env.USERPROFILE = tempHome;
   process.env.APPDATA = tempHome;
   delete process.env.GITNEXUS_AIR_GAP;
+  delete process.env.GITNEXUS_ALLOW_NPX_FALLBACK;
   process.exitCode = undefined;
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -53,6 +54,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks();
   delete process.env.GITNEXUS_AIR_GAP;
+  delete process.env.GITNEXUS_ALLOW_NPX_FALLBACK;
   process.exitCode = originalExitCode;
   if (originalHome === undefined) delete process.env.HOME;
   else process.env.HOME = originalHome;
@@ -113,7 +115,20 @@ describe('setup --air-gap', () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it('keeps the normal (non-air-gap) npx fallback available', async () => {
+  it('refuses the npx fallback by default even outside air-gap mode', async () => {
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const { setupCommand } = await setup();
+
+    await setupCommand({ codingAgent: 'opencode' });
+
+    expect(process.exitCode).toBe(1);
+    expect(stderr.mock.calls.map((call) => String(call[0])).join('\n')).toMatch(
+      /GITNEXUS_ALLOW_NPX_FALLBACK/,
+    );
+  });
+
+  it('only writes the npx entry when GITNEXUS_ALLOW_NPX_FALLBACK=1', async () => {
+    process.env.GITNEXUS_ALLOW_NPX_FALLBACK = '1';
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     await fs.mkdir(path.join(tempHome, '.config', 'opencode'), { recursive: true });
     const { setupCommand } = await setup();

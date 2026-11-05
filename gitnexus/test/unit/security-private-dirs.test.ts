@@ -8,7 +8,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { PRIVATE_DIRECTORY_MODE, ensurePrivateDirectory } from '../../src/storage/private-dirs.js';
+import {
+  PRIVATE_DIRECTORY_MODE,
+  PRIVATE_FILE_MODE,
+  ensurePrivateDirectory,
+  ensurePrivateFile,
+} from '../../src/storage/private-dirs.js';
 
 let tmp: string;
 
@@ -79,5 +84,55 @@ describe('ensurePrivateDirectory', () => {
     const target = path.join(tmp, 'not-a-dir');
     await fs.writeFile(target, 'x');
     await expect(ensurePrivateDirectory(target)).rejects.toThrow(/EEXIST|ENOTDIR|exists/i);
+  });
+});
+
+/**
+ * SEC-006 (files): `registry.json` and `config.json` written by an older
+ * release keep their umask-derived mode. The file-level half of the fix must
+ * tighten them on the next write, and must not follow a link to do it.
+ */
+describe('ensurePrivateFile', () => {
+  it('tightens an existing over-permissive file on POSIX', async (ctx) => {
+    if (process.platform === 'win32') return ctx.skip();
+    const target = path.join(tmp, 'registry.json');
+    await fs.writeFile(target, '{}');
+    await fs.chmod(target, 0o644);
+    expect(await modeOf(target)).toBe(0o644);
+
+    await ensurePrivateFile(target);
+
+    expect(await modeOf(target)).toBe(PRIVATE_FILE_MODE);
+  });
+
+  it('leaves an already-private file untouched', async (ctx) => {
+    if (process.platform === 'win32') return ctx.skip();
+    const target = path.join(tmp, 'config-private.json');
+    await fs.writeFile(target, '{}', { mode: 0o600 });
+    await fs.chmod(target, 0o600);
+    await ensurePrivateFile(target);
+    expect(await modeOf(target)).toBe(PRIVATE_FILE_MODE);
+  });
+
+  it('does not chmod through a symlink', async (ctx) => {
+    const outside = path.join(tmp, 'outside-file.json');
+    const target = path.join(tmp, 'registry-link.json');
+    await fs.writeFile(outside, '{}');
+    if (process.platform !== 'win32') await fs.chmod(outside, 0o644);
+    try {
+      await fs.symlink(outside, target, 'file');
+    } catch {
+      return ctx.skip();
+    }
+
+    await ensurePrivateFile(target);
+
+    if (process.platform !== 'win32') {
+      expect(await modeOf(outside)).toBe(0o644);
+    }
+  });
+
+  it('is a no-op for a missing file', async () => {
+    await expect(ensurePrivateFile(path.join(tmp, 'does-not-exist.json'))).resolves.toBeUndefined();
   });
 });
