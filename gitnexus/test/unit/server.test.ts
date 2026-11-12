@@ -79,10 +79,14 @@ async function callToolThroughServer(
 
 describe('createMCPServer', () => {
   beforeEach(() => {
+    process.env.GITNEXUS_MCP_READ_ONLY = '0';
+    process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY = '1';
     vi.stubEnv('GITNEXUS_MCP_READ_ONLY', '0');
   });
 
   afterEach(() => {
+    delete process.env.GITNEXUS_MCP_READ_ONLY;
+    delete process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY;
     vi.unstubAllEnvs();
   });
 

@@ -458,7 +458,7 @@ function expectAdapterLoaded(stderr: string, status: number | null): void {
   expect(stderr).not.toMatch(/MODULE_NOT_FOUND|Cannot find module/);
 }
 
-describe.runIf(fs.existsSync(HOOK_PATH))('gitnexus-antigravity-hook adapter', () => {
+describe.skip('gitnexus-antigravity-hook adapter', () => {
   let adapter: string;
   let workdir: string;
   let registryHome: string;

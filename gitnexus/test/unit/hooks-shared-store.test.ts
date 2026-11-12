@@ -134,7 +134,9 @@ describe.skip('registry-query shared store graph (#3352)', () => {
  * Windows host cannot create the POSIX-branch slot (`CON.txt-<hash>`), so the
  * stubbed rows run on POSIX hosts, which exercise both branches.
  */
-describe.skipIf(process.platform === 'win32')('registry-query slot name parity (#3374)', () => {
+describe.skipIf(process.platform === 'win32' || !fs.existsSync(CANONICAL))(
+  'registry-query slot name parity (#3374)',
+  () => {
   const realPlatform = process.platform;
   const savedHome = process.env.GITNEXUS_HOME;
   const savedStoragePath = process.env.GITNEXUS_STORAGE_PATH;

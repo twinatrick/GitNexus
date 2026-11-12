@@ -44,7 +44,7 @@ describe('query identity boundary through the real MCP server', () => {
     vi.stubEnv('HOME', userHome);
     vi.stubEnv('USERPROFILE', userHome);
     vi.stubEnv('GITNEXUS_HOME', path.join(root, 'home'));
-    vi.stubEnv('GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY', '1');
+    process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY = '1';
     vi.stubEnv('GITNEXUS_STORAGE_PATH', undefined);
     vi.stubEnv('GITNEXUS_STORAGE_ROOT', undefined);
     vi.stubEnv('GITNEXUS_SHARED_STORE', 'off');
