@@ -83,6 +83,9 @@ import {
 import { assertString, BadRequestError, createRouteLimiter } from './validation.js';
 import { parseGrepQuery, GREP_TIME_BUDGET_MS } from './grep-params.js';
 import { runGrepScanInWorker } from './grep-scan.js';
+import { isSensitiveFile, secretReadsAllowed } from '../core/security/sensitive-files.js';
+import { contentAllowedForPath } from '../core/security/content-policy.js';
+import { PathContainmentError, resolveContainedPath } from '../core/security/path-containment.js';
 import {
   analyzeCloneOptions,
   extractWebRepoName,
@@ -111,14 +114,13 @@ import {
 import { createLaunchAnalysisWorker } from './analyze-launch.js';
 import { UPLOAD_ROOT } from './upload-paths.js';
 import { sweepStaleUploads } from './upload-sweep.js';
-import { isRfc1918PrivateIpv4 } from './private-ip.js';
 import { logger, flushLoggerSync } from '../core/logger.js';
 import {
   bindServeUpdateControllerLifecycle,
   buildServerInfo,
   createServeUpdateController,
 } from './update-controller.js';
-import { buildOpsSnapshot, isGitNexusVercelOrigin, serializeOpsJob } from './ops-snapshot.js';
+import { buildOpsSnapshot, serializeOpsJob } from './ops-snapshot.js';
 
 export {
   bindServeUpdateControllerLifecycle,
@@ -164,7 +166,7 @@ export const isAllowedOrigin = (origin: string | undefined): boolean => {
     origin === 'http://127.0.0.1' ||
     origin.startsWith('http://[::1]:') ||
     origin === 'http://[::1]' ||
-    isGitNexusVercelOrigin(origin)
+    false
   ) {
     return true;
   }
@@ -186,7 +188,7 @@ export const isAllowedOrigin = (origin: string | undefined): boolean => {
   // without a restart. The write guard in middleware.ts snapshots it instead.
   if (createPublicOriginMatcher(process.env[PUBLIC_ORIGIN_ENV])?.matches(parsed)) return true;
 
-  return isRfc1918PrivateIpv4(parsed.hostname);
+  return false;
 };
 
 type GraphStreamRecord =
@@ -491,7 +493,7 @@ export const getNodeQuery = (table: string, includeContent: boolean): string => 
     : `MATCH (n:${tableLabel}) RETURN n.id AS id, n.name AS name, n.filePath AS filePath, n.startLine AS startLine, n.endLine AS endLine`;
 };
 
-const mapGraphNodeRow = (table: string, row: any, includeContent: boolean): GraphNode => ({
+export const mapGraphNodeRow = (table: string, row: any, includeContent: boolean): GraphNode => ({
   id: row.id ?? row[0],
   label: table as GraphNode['label'],
   properties: {
@@ -506,7 +508,13 @@ const mapGraphNodeRow = (table: string, row: any, includeContent: boolean): Grap
     startLine: row.startLine,
     endLine: row.endLine,
     text: row.text,
-    content: includeContent ? row.content : undefined,
+    // SEC-002: the graph serves the `content` column the indexer persisted, so
+    // this is a file-bytes surface even though no file is opened here. Older
+    // indexes (and ones built with GITNEXUS_ALLOW_SECRET_READS=1) still hold
+    // the rows; filtering by `filePath` is what keeps `.env` out of both
+    // `/api/graph` and its NDJSON stream.
+    content:
+      includeContent && contentAllowedForPath(row.filePath ?? row[2]) ? row.content : undefined,
     responseKeys: row.responseKeys,
     errorKeys: row.errorKeys,
     middleware: row.middleware,
@@ -827,6 +835,12 @@ export const handleFileRequest = async (
       res.status(403).json({ error: 'Path traversal denied' });
       return;
     }
+    if (!secretReadsAllowed() && (isSensitiveFile(filePath) || isSensitiveFile(realRel))) {
+      res.status(403).json({
+        error: 'Access to sensitive secret or credential file is denied by security policy',
+      });
+      return;
+    }
 
     const raw = await fs.readFile(realFull, 'utf-8');
 
@@ -910,6 +924,17 @@ export const handleQueryRequest = async (
   res: express.Response,
   resolveRepo: (repoName?: string) => Promise<{ storagePath: string } | undefined>,
 ): Promise<void> => {
+  if (
+    process.env.GITNEXUS_MCP_READ_ONLY !== '0' &&
+    process.env.GITNEXUS_MCP_READ_ONLY?.toLowerCase() !== 'false' &&
+    process.env.GITNEXUS_HTTP_ALLOW_CYPHER !== '1'
+  ) {
+    res.status(403).json({
+      error:
+        'Raw Cypher queries are disabled when read-only policy is active (set GITNEXUS_MCP_READ_ONLY=0 to enable)',
+    });
+    return;
+  }
   try {
     const cypher = req.body.cypher as string;
     if (!cypher) {
@@ -984,11 +1009,23 @@ export function validateAnalyzeToken(
   return null;
 }
 
+/**
+ * SEC-001: canonicalize an Analyze target and require it to stay inside the
+ * workspace root. Symlinks (and Windows junctions) are resolved on both sides,
+ * so an in-workspace link that points outside the workspace is rejected instead
+ * of silently widening the serving boundary.
+ */
+export const resolveAnalyzeRepoPath = async (
+  repoLocalPath: string,
+  workspaceRoot: string = process.env.GITNEXUS_WORKSPACE_ROOT || process.cwd(),
+): Promise<string> => resolveContainedPath(workspaceRoot, repoLocalPath);
+
 export const createServer = async (port: number, host: string = '127.0.0.1') => {
-  // Refuse a public-origin config before anything is opened or bound: `serve`
-  // has no authentication yet, so the setting that makes a public bind usable
-  // must not be usable either. Throws — `serve` reports it and exits non-zero.
-  assertServeAuthForPublicOrigin();
+  // Refuse a public-origin config or an unauthenticated non-loopback bind
+  // before anything is opened or bound: `serve` has no authentication yet, so
+  // non-loopback exposure must not be usable without an authenticating proxy.
+  // Throws — `serve` reports it and exits non-zero.
+  assertServeAuthForPublicOrigin(host);
 
   // Surface a cleartext Azure DevOps PAT config at boot (operators rarely
   // read per-request logs). Warn-only — http:// self-hosted stays supported.
@@ -1010,7 +1047,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
   // cors: the cors middleware ends OPTIONS preflight responses, so this header
   // has to be set on res before cors writes the preflight reply.
   app.use((_req, res, next) => {
-    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    // Hardened Fork (ADR-0003): Removed Access-Control-Allow-Private-Network: true to block RFC1918/drive-by PNA exfiltration
     next();
   });
 
@@ -1477,12 +1514,12 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
   });
 
   // Execute Cypher query
-  app.post('/api/query', async (req, res) => {
+  app.post('/api/query', createRouteLimiter(), requireTrustedOrigin, async (req, res) => {
     await handleQueryRequest(req, res, resolveRepo);
   });
 
   // Search (supports mode: 'hybrid' | 'semantic' | 'bm25', and optional enrichment)
-  app.post('/api/search', async (req, res) => {
+  app.post('/api/search', createRouteLimiter(), requireTrustedOrigin, async (req, res) => {
     try {
       const query = (req.body.query ?? '').trim();
       if (!query) {
@@ -1715,6 +1752,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
       for (const row of fileRows) {
         const filePath: string = row.filePath || '';
         if (fileFilter && !filePath.toLowerCase().includes(fileFilter)) continue;
+        if (!secretReadsAllowed() && isSensitiveFile(filePath)) continue;
         filePaths.push(filePath);
       }
 
@@ -1892,6 +1930,38 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
           res.status(400).json({ error: 'Provide "url" (git URL) or "path" (local path)' });
           return;
         }
+        if (repoUrl && process.env.GITNEXUS_ALLOW_REMOTE_CLONE !== '1') {
+          res.status(403).json({
+            error:
+              'Remote URL cloning via HTTP API is disabled by security policy (set GITNEXUS_ALLOW_REMOTE_CLONE=1 to enable)',
+          });
+          return;
+        }
+        // SEC-001: symlink-aware containment. A lexical `path.relative` check is
+        // bypassed by an in-workspace symlink that points outside it, so the
+        // boundary must be evaluated on canonical (`realpath`) forms of both the
+        // workspace root and the requested path. TOCTOU is handled downstream:
+        // the walker re-resolves every entry while traversing.
+        let analyzeRepoPath = repoLocalPath;
+        if (repoLocalPath) {
+          try {
+            analyzeRepoPath = await resolveAnalyzeRepoPath(repoLocalPath);
+          } catch (err) {
+            if (err instanceof PathContainmentError) {
+              res.status(403).json({
+                error:
+                  'Analyzing directories outside the active workspace is denied by security policy',
+              });
+              return;
+            }
+            const code = (err as NodeJS.ErrnoException | undefined)?.code;
+            if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'ELOOP') {
+              res.status(400).json({ error: 'Analyze path does not exist or cannot be resolved' });
+              return;
+            }
+            throw err;
+          }
+        }
 
         // Branch: optional index-branch selector, validated with the same rules
         // as the CLI's `--branch` so both entry points accept the same refs.
@@ -1941,7 +2011,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
 
         const job = jobManager.createJob({
           repoUrl,
-          repoPath: repoLocalPath,
+          repoPath: analyzeRepoPath,
           branch: analyzeBranch,
         });
 
@@ -1966,7 +2036,17 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
 
         // Start async work — don't await
         (async () => {
-          let targetPath = repoLocalPath;
+          // SEC-001: hand the worker the CANONICAL path (`analyzeRepoPath`),
+          // never the raw request string. `analyzeRepoPath` is the realpath of
+          // the requested directory, so a symlink swapped in between the
+          // containment check above and this fork cannot redirect traversal:
+          // the canonical string names the resolved directory, not the link.
+          // Passing `repoLocalPath` here re-opened exactly that TOCTOU window —
+          // the walker would have re-resolved the (now hostile) link and
+          // treated the out-of-tree target as the repo root. For clone jobs
+          // `analyzeRepoPath` is undefined and the branch below assigns
+          // `getCloneDir(...)`, so the clone flow is unaffected.
+          let targetPath = analyzeRepoPath;
           try {
             // Clone if URL provided
             if (repoUrl && !repoLocalPath) {

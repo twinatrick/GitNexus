@@ -10,6 +10,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   PUBLIC_ORIGIN_ENV,
+  TRUST_PROXY_ENV,
   assertServeAuthForPublicOrigin,
   createWriteOriginGuard,
   isServeAuthConfigured,
@@ -290,5 +291,35 @@ describe('assertServeAuthForPublicOrigin', () => {
   // without rewriting it. Pinned so the flip cannot happen unnoticed.
   it('reports no auth configured, since serve has none', () => {
     expect(isServeAuthConfigured()).toBe(false);
+  });
+
+  it.each(['localhost', '127.0.0.1', '::1', '[::1]'])(
+    'allows loopback bind host %s without authentication',
+    (host) => {
+      setPublicOrigin(undefined);
+      delete process.env[TRUST_PROXY_ENV];
+      expect(() => assertServeAuthForPublicOrigin(host)).not.toThrow();
+    },
+  );
+
+  it.each(['0.0.0.0', '::', '192.168.1.10', '100.64.0.5'])(
+    'refuses non-loopback bind host %s when no authentication or trusted proxy is configured',
+    (host) => {
+      setPublicOrigin(undefined);
+      delete process.env[TRUST_PROXY_ENV];
+      expect(() => assertServeAuthForPublicOrigin(host)).toThrow(
+        /Refusing to bind 'gitnexus serve' to non-loopback address/,
+      );
+    },
+  );
+
+  it('allows non-loopback bind host when fronted by an authenticating reverse proxy (GITNEXUS_TRUST_PROXY)', () => {
+    setPublicOrigin(undefined);
+    process.env[TRUST_PROXY_ENV] = '1';
+    try {
+      expect(() => assertServeAuthForPublicOrigin('0.0.0.0')).not.toThrow();
+    } finally {
+      delete process.env[TRUST_PROXY_ENV];
+    }
   });
 });

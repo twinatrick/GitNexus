@@ -243,17 +243,35 @@ export function isServeAuthConfigured(): boolean {
  * @throws when {@link PUBLIC_ORIGIN_ENV} is set without authentication. `serve`
  *   surfaces it as `serve.startFailed` and exits non-zero.
  */
-export function assertServeAuthForPublicOrigin(): void {
+export function assertServeAuthForPublicOrigin(boundHost?: string): void {
   const raw = process.env[PUBLIC_ORIGIN_ENV]?.trim();
-  if (!raw || isServeAuthConfigured()) return;
-  throw new Error(
-    `${PUBLIC_ORIGIN_ENV} is set (${raw}), but 'gitnexus serve' has no authentication yet. ` +
-      `It would admit browser writes from that origin, and requests without an Origin header ` +
-      `(curl, any script) already reach POST /api/analyze and DELETE /api/repo unauthenticated — ` +
-      `so a reachable deployment would let anyone index and delete repositories. Unset ` +
-      `${PUBLIC_ORIGIN_ENV} and bind loopback (the default), or reach the server through a proxy ` +
-      `that authenticates for it.`,
-  );
+  if (raw && !isServeAuthConfigured()) {
+    throw new Error(
+      `${PUBLIC_ORIGIN_ENV} is set (${raw}), but 'gitnexus serve' has no authentication yet. ` +
+        `It would admit browser writes from that origin, and requests without an Origin header ` +
+        `(curl, any script) already reach POST /api/analyze and DELETE /api/repo unauthenticated — ` +
+        `so a reachable deployment would let anyone index and delete repositories. Unset ` +
+        `${PUBLIC_ORIGIN_ENV} and bind loopback (the default), or reach the server through a proxy ` +
+        `that authenticates for it.`,
+    );
+  }
+
+  if (boundHost !== undefined) {
+    const trimmedHost = boundHost.trim();
+    const normalized = normalizeBoundHost(trimmedHost);
+    const isLoopback =
+      trimmedHost === '' || (normalized !== undefined && isLoopbackHostname(normalized));
+    const behindTrustedProxy = Boolean(process.env[TRUST_PROXY_ENV]?.trim());
+    if (!isLoopback && !isServeAuthConfigured() && !behindTrustedProxy) {
+      throw new Error(
+        `Refusing to bind 'gitnexus serve' to non-loopback address (${boundHost}) because ` +
+          `'gitnexus serve' has no authentication yet. Requests without an Origin header ` +
+          `(curl, any script) reach /api/file, /api/grep, /api/graph, POST /api/analyze, and ` +
+          `DELETE /api/repo unauthenticated. Bind loopback (--host 127.0.0.1 or --host localhost, ` +
+          `the default), or reach the server through an authenticating proxy with ${TRUST_PROXY_ENV} set.`,
+      );
+    }
+  }
 }
 
 /**

@@ -78,6 +78,18 @@ async function callToolThroughServer(
 // ─── createMCPServer ─────────────────────────────────────────────────
 
 describe('createMCPServer', () => {
+  beforeEach(() => {
+    process.env.GITNEXUS_MCP_READ_ONLY = '0';
+    process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY = '1';
+    vi.stubEnv('GITNEXUS_MCP_READ_ONLY', '0');
+  });
+
+  afterEach(() => {
+    delete process.env.GITNEXUS_MCP_READ_ONLY;
+    delete process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY;
+    vi.unstubAllEnvs();
+  });
+
   it('returns a Server instance with expected shape', () => {
     const backend = createMockBackend();
     const server = createMCPServer(backend);
@@ -191,9 +203,10 @@ describe('createMCPServer', () => {
   });
 
   it.each(
-    [{ GITNEXUS_MCP_DEFAULT_REPO: 'alpha' }, { GITNEXUS_MCP_ALLOWED_REPOS: 'alpha' }].flatMap(
-      (env) => [false, true].map((readOnly) => ({ env, readOnly })),
-    ),
+    [
+      { GITNEXUS_MCP_DEFAULT_REPO: 'alpha', GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY: '1' },
+      { GITNEXUS_MCP_ALLOWED_REPOS: 'alpha' },
+    ].flatMap((env) => [false, true].map((readOnly) => ({ env, readOnly }))),
   )(
     'advertises the resolved repository default in tool schemas (%j)',
     async ({ env, readOnly }) => {
@@ -293,7 +306,9 @@ describe('getNextStepHint (via tool call response)', () => {
       search_query: 'auth',
       repo: 'demo',
     });
-    expect(JSON.parse(text).next).toBe(QUERY_HINT_BASE);
+    expect(JSON.parse(text).next).toBe(
+      `<untrusted_repo_metadata source="gitnexus-mcp-hint">\n${QUERY_HINT_BASE}\n</untrusted_repo_metadata>`,
+    );
     expect(text).not.toContain('content_truncated');
   });
 
@@ -307,7 +322,7 @@ describe('getNextStepHint (via tool call response)', () => {
       include_content: true,
     });
     expect(JSON.parse(text).next).toBe(
-      `${QUERY_HINT_BASE} Source previews marked content_truncated are incomplete; use context({uid: "<id>", include_content: true, repo: "demo"}) or read_file with a bounded line range for more.`,
+      `<untrusted_repo_metadata source="gitnexus-mcp-hint">\n${QUERY_HINT_BASE} Source previews marked content_truncated are incomplete; use context({uid: "<id>", include_content: true, repo: "demo"}) or read_file with a bounded line range for more.\n</untrusted_repo_metadata>`,
     );
   });
 

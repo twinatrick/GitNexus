@@ -1519,6 +1519,13 @@ jobs:
           if [[ -r "${apparmor_userns}" ]] && [[ "$(<"${apparmor_userns}")" == '1' ]]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
+          if command -v aa-teardown >/dev/null 2>&1; then
+            sudo aa-teardown || true
+          fi
+          if [[ -w /sys/kernel/security/apparmor/.remove ]]; then
+            printf 'bwrap' | sudo tee /sys/kernel/security/apparmor/.remove >/dev/null 2>&1 || true
+            printf 'bwrap-userns-restrict' | sudo tee /sys/kernel/security/apparmor/.remove >/dev/null 2>&1 || true
+          fi
           canary_runtime="${RUNNER_TEMP}/claude-canary"
           install -d -m 0700 "${canary_runtime}"
           install -m 0600 \

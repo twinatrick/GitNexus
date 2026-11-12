@@ -70,14 +70,14 @@ describe('createServer CORS/PNA stack — OPTIONS preflight', () => {
     const res = await fetch(`${baseUrl}/api/repos`, {
       method: 'OPTIONS',
       headers: {
-        Origin: 'https://gitnexus.vercel.app',
+        Origin: 'https://app.gitnexus.dev',
         'Access-Control-Request-Method': 'GET',
         'Access-Control-Request-Private-Network': 'true',
       },
     });
 
     expect(res.status).toBe(204);
-    expect(res.headers.get('access-control-allow-origin')).toBe('https://gitnexus.vercel.app');
+    expect(res.headers.get('access-control-allow-origin')).toBe('https://app.gitnexus.dev');
     expect(res.headers.get('access-control-allow-private-network')).toBe('true');
   });
 

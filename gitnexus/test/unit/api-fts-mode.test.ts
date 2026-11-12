@@ -364,6 +364,10 @@ const cases = [
 ] as const;
 
 describe('serve uses one metadata-derived FTS mode on every DB-open path', () => {
+  beforeEach(() => {
+    vi.stubEnv('GITNEXUS_MCP_READ_ONLY', '0');
+  });
+
   it.each(cases)(
     'keeps mixed read requests consistent for $name indexes',
     async ({ fts, skip }) => {

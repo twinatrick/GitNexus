@@ -149,7 +149,11 @@ describe('MCP repository policy', () => {
     const backend = createBackend();
     vi.mocked(backend.countRepos).mockResolvedValue(2);
     vi.mocked(backend.cachedRepoCount).mockReturnValue(1);
-    const policy = await createMcpRepositoryPolicy(backend, {});
+    // SEC-003: unrestricted access to the global registry is now an explicit
+    // opt-in; a CWD that is not an indexed root no longer grants it.
+    const policy = await createMcpRepositoryPolicy(backend, {
+      GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY: '1',
+    });
     await expect(policy.toolSchemaRepoRequirements(backend)).resolves.toEqual({
       readOnlyRequiresRepo: false,
       mutatingRequiresRepo: false,
@@ -291,18 +295,84 @@ describe('MCP repository policy', () => {
     },
   );
 
-  it('is transparent when no repository policy is configured', async () => {
+  it('fails closed when no policy is configured and the CWD is not an indexed root', async () => {
     const backend = createBackend();
-    const policy = await createMcpRepositoryPolicy(backend, {});
-    await policy.scopeBackend(backend).callTool('query', { search_query: 'auth' });
-    expect(backend.callTool).toHaveBeenCalledWith('query', { search_query: 'auth' });
-    expect(await policy.scopeBackend(backend).listRepos()).toHaveLength(REPOS.length);
+    const policy = await createMcpRepositoryPolicy(backend, {
+      GITNEXUS_WORKSPACE_ROOT: '/somewhere/else',
+    });
+
+    await expect(
+      policy.scopeBackend(backend).callTool('query', { search_query: 'auth' }),
+    ).rejects.toThrow(/not available through this MCP server/i);
+    expect(backend.callTool).not.toHaveBeenCalled();
+    expect(await policy.scopeBackend(backend).listRepos()).toHaveLength(0);
   });
 
-  it('uses a configured default without restricting explicit dynamic selections', async () => {
+  it('scopes an unconfigured server to the repository rooted at the CWD', async () => {
+    const backend = createBackend();
+    const policy = await createMcpRepositoryPolicy(backend, {
+      GITNEXUS_WORKSPACE_ROOT: '/repos/alpha',
+    });
+    const scoped = policy.scopeBackend(backend);
+
+    expect((await scoped.listRepos()).map((repo) => repo.name)).toEqual(['Alpha']);
+    await scoped.callTool('query', { search_query: 'auth' });
+    expect(backend.callTool).toHaveBeenLastCalledWith('query', {
+      search_query: 'auth',
+      repo: '/repos/alpha',
+    });
+    await expect(scoped.callTool('query', { search_query: 'auth', repo: 'Beta' })).rejects.toThrow(
+      /not available through this MCP server/i,
+    );
+    expect(backend.callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not grant a descendant repository from a parent CWD', async () => {
+    const backend = createBackend([{ ...REPOS[0]!, name: 'Root', path: '/repos' }, ...REPOS]);
+    const policy = await createMcpRepositoryPolicy(backend, {
+      GITNEXUS_WORKSPACE_ROOT: '/repos',
+    });
+    const scoped = policy.scopeBackend(backend);
+
+    expect((await scoped.listRepos()).map((repo) => repo.name)).toEqual(['Root']);
+    await expect(scoped.callTool('query', { search_query: 'auth', repo: 'Alpha' })).rejects.toThrow(
+      /not available through this MCP server/i,
+    );
+    expect(backend.callTool).not.toHaveBeenCalled();
+  });
+
+  it('does not grant an ancestor repository from a nested CWD', async () => {
+    const backend = createBackend([{ ...REPOS[0]!, name: 'Workspace', path: '/repos' }, ...REPOS]);
+    const policy = await createMcpRepositoryPolicy(backend, {
+      GITNEXUS_WORKSPACE_ROOT: '/repos/alpha/src',
+    });
+    const scoped = policy.scopeBackend(backend);
+
+    expect(await scoped.listRepos()).toHaveLength(0);
+    await expect(
+      scoped.callTool('query', { search_query: 'auth', repo: '/repos' }),
+    ).rejects.toThrow(/not available through this MCP server/i);
+  });
+
+  it('rejects ../ traversal through a configured allowlist', async () => {
+    const backend = createBackend();
+    const policy = await createMcpRepositoryPolicy(backend, {
+      GITNEXUS_MCP_ALLOWED_REPOS: 'Alpha',
+    });
+
+    await expect(
+      policy.scopeBackend(backend).callTool('query', {
+        search_query: 'auth',
+        repo: '/repos/../beta',
+      }),
+    ).rejects.toThrow(/not available through this MCP server/i);
+  });
+
+  it('uses a configured default without restricting explicit dynamic selections when global registry is enabled', async () => {
     const backend = createBackend();
     const policy = await createMcpRepositoryPolicy(backend, {
       GITNEXUS_MCP_DEFAULT_REPO: 'Alpha',
+      GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY: '1',
     });
     const scoped = policy.scopeBackend(backend);
 
@@ -317,6 +387,32 @@ describe('MCP repository policy', () => {
       search_query: 'auth',
       repo: 'newly-indexed',
     });
+  });
+
+  it('keeps CWD isolation enforced when only GITNEXUS_MCP_DEFAULT_REPO is set', async () => {
+    const backend = createBackend();
+    const policy = await createMcpRepositoryPolicy(backend, {
+      GITNEXUS_MCP_DEFAULT_REPO: 'Alpha',
+      GITNEXUS_WORKSPACE_ROOT: '/repos/alpha',
+    });
+    const scoped = policy.scopeBackend(backend);
+
+    expect((await scoped.listRepos()).map((r) => r.name)).toEqual(['Alpha']);
+    const listed = (await scoped.callTool('list_repos', {})) as {
+      repositories: RepoListing[];
+    };
+    expect(listed.repositories.map((r) => r.name)).toEqual(['Alpha']);
+
+    await expect(scoped.callTool('query', { search_query: 'auth', repo: 'Beta' })).rejects.toThrow(
+      /not available through this MCP server/i,
+    );
+
+    await expect(
+      createMcpRepositoryPolicy(backend, {
+        GITNEXUS_MCP_DEFAULT_REPO: 'Beta',
+        GITNEXUS_WORKSPACE_ROOT: '/repos/alpha',
+      }),
+    ).rejects.toThrow(/default repository is not in the configured allowlist/i);
   });
 
   it('enforces one policy across MCP tools, aliases, discovery, and resources', async () => {

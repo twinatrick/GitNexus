@@ -10,7 +10,7 @@ import {
   warnIfNpm11NpxRisk,
   NPX_REF,
 } from '../../src/cli/resolve-invocation.js';
-import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import os from 'node:os';
@@ -768,7 +768,7 @@ describe('formatAnalyzeCommand end-to-end via the pure scan (#1938)', () => {
   });
 });
 
-describe('resolve-analyze-cmd.cjs parity', () => {
+describe.runIf(existsSync(PLUGIN_CJS))('resolve-analyze-cmd.cjs parity', () => {
   it('keeps the two CJS hook copies byte-identical', () => {
     expect(readFileSync(CANONICAL_CJS, 'utf-8')).toBe(readFileSync(PLUGIN_CJS, 'utf-8'));
   });

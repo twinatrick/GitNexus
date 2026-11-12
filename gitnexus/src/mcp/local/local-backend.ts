@@ -70,6 +70,11 @@ import {
   getGitRoot,
 } from '../../storage/git.js';
 import { realpathSync } from 'fs';
+import { isSensitiveFile, secretReadsAllowed } from '../../core/security/sensitive-files.js';
+import {
+  contentAllowedForPath,
+  suppressedContentWarning,
+} from '../../core/security/content-policy.js';
 import { parseGrepQuery, GREP_TIME_BUDGET_MS } from '../../server/grep-params.js';
 import { runGrepScanInWorker } from '../../server/grep-scan.js';
 import {
@@ -4133,6 +4138,10 @@ export class LocalBackend {
     const returnedDefinitions = definitions.slice(0, 20);
     timer.stop(); // formatting
 
+    // SEC-002: content is fetched by node id below, so the sensitive-file
+    // policy has to be applied to the row's own `filePath` — the shape of the
+    // indexed node is the only evidence of which file the bytes came from.
+    let suppressedContentCount = 0;
     if (includeContent) {
       timer.start('content');
       const targets = new Map<
@@ -4149,13 +4158,21 @@ export class LocalBackend {
             repo.lbugPath,
             `MATCH (n) WHERE n.id IN $nodeIds
              RETURN n.id AS nodeId, substring(n.content, 1, $previewChars) AS content,
-                    size(n.content) > $previewChars AS contentTruncated`,
+                    size(n.content) > $previewChars AS contentTruncated,
+                    n.filePath AS filePath`,
             { nodeIds: ids, previewChars },
           );
           for (const row of rows) {
             assertQueryIdentity(row, 'nodeId', 0);
             const target = targets.get(row.nodeId ?? row[0]);
             if (!target) continue;
+            // SEC-002: `filePath` is appended LAST so the positional identity
+            // assertions above keep their indexes.
+            const filePath = row.filePath ?? row[3];
+            if (!contentAllowedForPath(filePath)) {
+              suppressedContentCount++;
+              continue;
+            }
             const content = row.content ?? row[1];
             if (content) target.content = content;
             if (row.contentTruncated ?? row[2]) target.content_truncated = true;
@@ -4181,6 +4198,11 @@ export class LocalBackend {
     // flag `partial` when enrichment was lost. Both are omitted on the clean
     // path, leaving the success-path response shape byte-identical.
     const warnings: string[] = [];
+    // SEC-002: say WHY content is missing instead of returning a silent empty
+    // field an agent would read as "this symbol has no source".
+    if (suppressedContentCount > 0) {
+      warnings.push(suppressedContentWarning(suppressedContentCount, false));
+    }
     if (!ftsUsed) {
       // #2767: attach what THIS session resolved (repo/branch/indexed-at) so a
       // CLI/MCP mismatch is visible in the warning itself rather than requiring
@@ -5172,7 +5194,9 @@ export class LocalBackend {
         filePath: (r.filePath ?? r[3]) as string,
         startLine: (r.startLine ?? r[4]) as number,
         endLine: (r.endLine ?? r[5]) as number,
-        ...(include_content ? { content: (r.content ?? r[6]) as string | undefined } : {}),
+        ...(include_content && contentAllowedForPath(r.filePath ?? r[3])
+          ? { content: (r.content ?? r[6]) as string | undefined }
+          : {}),
       };
       assertSymbolIdentity(symbol.id, uid);
       // Same LadybugDB label-enrichment as the name-based path: a UID
@@ -5310,7 +5334,9 @@ export class LocalBackend {
       filePath: (r.filePath ?? r[3]) as string,
       startLine: (r.startLine ?? r[4]) as number,
       endLine: (r.endLine ?? r[5]) as number,
-      ...(include_content ? { content: (r.content ?? r[6]) as string | undefined } : {}),
+      ...(include_content && contentAllowedForPath(r.filePath ?? r[3])
+        ? { content: (r.content ?? r[6]) as string | undefined }
+        : {}),
     }));
     // An exact File path wins over anchored suffix candidates. Without this,
     // `lib/a.ts` and `src/lib/a.ts` both score as File candidates and turn an
@@ -10378,6 +10404,11 @@ export class LocalBackend {
     if (realRel === '..' || realRel.startsWith(`..${path.sep}`) || path.isAbsolute(realRel)) {
       return { error: 'Path traversal denied.' };
     }
+    if (!secretReadsAllowed() && (isSensitiveFile(rawPath) || isSensitiveFile(realRel))) {
+      return {
+        error: 'Access to sensitive secret or credential file is denied by security policy.',
+      };
+    }
     const raw = await fs.readFile(realFull, 'utf-8');
     const lines = raw.split('\n');
     if (startLine !== undefined) {
@@ -10452,6 +10483,7 @@ export class LocalBackend {
     for (const row of fileRows) {
       const filePath: string = row.filePath || '';
       if (parsed.fileFilter && !filePath.toLowerCase().includes(parsed.fileFilter)) continue;
+      if (!secretReadsAllowed() && isSensitiveFile(filePath)) continue;
       filePaths.push(filePath);
     }
     // The shared scanner only checks a lexical prefix, then readFile follows

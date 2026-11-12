@@ -25,6 +25,13 @@ vi.mock('child_process', () => ({
 }));
 
 describe('setupOpenCode — JSONC preservation', () => {
+  beforeEach(() => {
+    process.env.GITNEXUS_ALLOW_NPX_FALLBACK = '1';
+  });
+
+  afterEach(() => {
+    delete process.env.GITNEXUS_ALLOW_NPX_FALLBACK;
+  });
   let tempHome: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;
@@ -237,7 +244,7 @@ describe('setupOpenCode — JSONC preservation', () => {
   });
 
   it('updates existing gitnexus MCP entry without losing other keys', async () => {
-    execFileSyncMock.mockReturnValueOnce('/usr/local/bin/gitnexus\n');
+    execFileSyncMock.mockReturnValue('/usr/local/bin/gitnexus\n');
 
     const jsonc = `{
   // config comment
@@ -261,6 +268,10 @@ describe('setupOpenCode — JSONC preservation', () => {
     expect(config.mcp.gitnexus).toEqual({
       type: 'local',
       command: ['/usr/local/bin/gitnexus', 'mcp'],
+      environment: {
+        GITNEXUS_MCP_READ_ONLY: '1',
+        GITNEXUS_NO_UPDATE_NOTIFIER: '1',
+      },
     });
   });
 
@@ -379,7 +390,8 @@ describe('setupOpenCode — JSONC preservation', () => {
   });
 });
 
-describe('setupCursor — JSONC preservation', () => {
+// OpenCode-only fork: Cursor and Claude Code setup targets are skipped.
+describe.skip('setupCursor — JSONC preservation', () => {
   let tempHome: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;
@@ -480,7 +492,7 @@ describe('setupCursor — JSONC preservation', () => {
   });
 });
 
-describe('setupClaudeCode — JSONC preservation', () => {
+describe.skip('setupClaudeCode — JSONC preservation', () => {
   let tempHome: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;
@@ -567,7 +579,7 @@ describe('setupClaudeCode — JSONC preservation', () => {
   });
 });
 
-describe('installClaudeCodeHooks — JSONC preservation', () => {
+describe.skip('installClaudeCodeHooks — JSONC preservation', () => {
   let tempHome: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;

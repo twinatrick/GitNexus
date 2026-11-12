@@ -58,7 +58,9 @@ const CURSOR_HOOKS_JSON = path.resolve(
 );
 
 const require = createRequire(import.meta.url);
-const { parseRgGrepPattern, tokenizeShellWords } = require(CURSOR_HOOK) as {
+const { parseRgGrepPattern, tokenizeShellWords } = (
+  fs.existsSync(CURSOR_HOOK) ? require(CURSOR_HOOK) : {}
+) as {
   parseRgGrepPattern: (command: string) => string | null;
   tokenizeShellWords: (command: string) => string[];
 };
@@ -129,7 +131,7 @@ function runHook(
 
 // ─── Manifest + hook file presence ───────────────────────────────────
 
-describe('Cursor integration files', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor integration files', () => {
   it('hook script exists', () => {
     expect(fs.existsSync(CURSOR_HOOK)).toBe(true);
   });
@@ -154,7 +156,7 @@ describe('Cursor integration files', () => {
 
 // ─── hooks.json wiring ──────────────────────────────────────────────
 
-describe('hooks.json wiring', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('hooks.json wiring', () => {
   const manifest = JSON.parse(fs.readFileSync(CURSOR_HOOKS_JSON, 'utf-8'));
 
   it('declares version 1', () => {
@@ -193,7 +195,7 @@ describe('hooks.json wiring', () => {
 
 // ─── Source code regressions ────────────────────────────────────────
 
-describe('Cursor hook source regressions', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook source regressions', () => {
   const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
 
   it('does not pass shell: true to spawnSync', () => {
@@ -259,7 +261,7 @@ describe('Cursor hook source regressions', () => {
 
 // ─── extractPattern coverage (source-level) ─────────────────────────
 
-describe('Cursor hook extractPattern coverage', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook extractPattern coverage', () => {
   const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
 
   it("handles 'grep' tool (Cursor matcher: Grep)", () => {
@@ -297,7 +299,7 @@ describe('Cursor hook extractPattern coverage', () => {
 
 // ─── Behavior: graceful no-op paths (no augment CLI invocation) ─────
 
-describe('Cursor hook behavior — early-exit paths', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook behavior — early-exit paths', () => {
   it('exits cleanly on empty stdin', () => {
     const result = spawnSync(process.execPath, [CURSOR_HOOK], {
       input: '',
@@ -407,7 +409,7 @@ describe('Cursor hook behavior — early-exit paths', () => {
 
 // ─── Behavior: GITNEXUS_DEBUG payload logging ────────────────────────
 
-describe('Cursor hook debug logging', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook debug logging', () => {
   it('echoes the payload to stderr only when GITNEXUS_DEBUG is set', () => {
     const payload = {
       tool_name: 'Grep',
@@ -444,7 +446,7 @@ describe('Cursor hook debug logging', () => {
 
 // ─── Source code regression: npx fallback stays under the host budget ─────
 
-describe('Cursor hook npx fallback host budget', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook npx fallback host budget', () => {
   const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
   const manifest = JSON.parse(
     fs.readFileSync(path.join(path.dirname(CURSOR_HOOK), 'hooks.json'), 'utf-8'),
@@ -497,84 +499,91 @@ describe('Cursor hook npx fallback host budget', () => {
 // failed after installation and silently used the 60s default, which
 // happened to match the shipped manifest and hid the bug.
 
-describe('Cursor hook host budget from the installed manifest', () => {
-  const hook = require(CURSOR_HOOK) as {
-    resolveCursorHostBudgetMs: (scriptDir?: string) => number;
-  };
+describe.runIf(fs.existsSync(CURSOR_HOOK))(
+  'Cursor hook host budget from the installed manifest',
+  () => {
+    const hook = require(CURSOR_HOOK) as {
+      resolveCursorHostBudgetMs: (scriptDir?: string) => number;
+    };
 
-  let projectRoot: string;
-  let installedHooksDir: string;
+    let projectRoot: string;
+    let installedHooksDir: string;
 
-  beforeEach(() => {
-    projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitnexus-cursor-layout-'));
-    installedHooksDir = path.join(projectRoot, 'hooks');
-    fs.mkdirSync(installedHooksDir, { recursive: true });
-    fs.mkdirSync(path.join(projectRoot, '.cursor'), { recursive: true });
-  });
-
-  afterEach(() => {
-    fs.rmSync(projectRoot, { recursive: true, force: true });
-  });
-
-  function writeManifest(manifest: unknown) {
-    fs.writeFileSync(
-      path.join(projectRoot, '.cursor', 'hooks.json'),
-      JSON.stringify(manifest, null, 2),
-    );
-  }
-
-  it('reads the timeout from <project>/.cursor/hooks.json, not from beside the script', () => {
-    // 30s — deliberately NOT the 60s default, so a silent fallback to the
-    // default cannot pass this test.
-    writeManifest({
-      version: 1,
-      hooks: {
-        postToolUse: [
-          { matcher: 'Shell|Read|Grep', command: 'node ./hooks/gitnexus-hook.cjs', timeout: 30 },
-        ],
-      },
+    beforeEach(() => {
+      projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitnexus-cursor-layout-'));
+      installedHooksDir = path.join(projectRoot, 'hooks');
+      fs.mkdirSync(installedHooksDir, { recursive: true });
+      fs.mkdirSync(path.join(projectRoot, '.cursor'), { recursive: true });
     });
-    expect(hook.resolveCursorHostBudgetMs(installedHooksDir)).toBe(30_000);
-  });
 
-  it("selects this hook's own entry instead of assuming entry zero", () => {
-    writeManifest({
-      version: 1,
-      hooks: {
-        postToolUse: [
-          { matcher: 'Bash', command: 'node ./hooks/some-other-hook.cjs', timeout: 5 },
-          {
-            matcher: 'Shell|Read|Grep',
-            command: 'node ./hooks/gitnexus-hook.cjs',
-            timeout: 45,
-          },
-        ],
-      },
+    afterEach(() => {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
     });
-    expect(hook.resolveCursorHostBudgetMs(installedHooksDir)).toBe(45_000);
-  });
 
-  it('keeps the adjacent manifest working for source-tree execution', () => {
-    // The repo ships the manifest next to the script, so that layout must
-    // still resolve — it is how the hook runs straight out of a checkout.
-    fs.writeFileSync(
-      path.join(installedHooksDir, 'hooks.json'),
-      JSON.stringify({
+    function writeManifest(manifest: unknown) {
+      fs.writeFileSync(
+        path.join(projectRoot, '.cursor', 'hooks.json'),
+        JSON.stringify(manifest, null, 2),
+      );
+    }
+
+    it('reads the timeout from <project>/.cursor/hooks.json, not from beside the script', () => {
+      // 30s — deliberately NOT the 60s default, so a silent fallback to the
+      // default cannot pass this test.
+      writeManifest({
         version: 1,
         hooks: {
           postToolUse: [
-            { matcher: 'Shell|Read|Grep', command: 'node ./hooks/gitnexus-hook.cjs', timeout: 25 },
+            { matcher: 'Shell|Read|Grep', command: 'node ./hooks/gitnexus-hook.cjs', timeout: 30 },
           ],
         },
-      }),
-    );
-    expect(hook.resolveCursorHostBudgetMs(installedHooksDir)).toBe(25_000);
-  });
+      });
+      expect(hook.resolveCursorHostBudgetMs(installedHooksDir)).toBe(30_000);
+    });
 
-  it('falls back to the shipped default when no manifest declares a timeout', () => {
-    expect(hook.resolveCursorHostBudgetMs(installedHooksDir)).toBe(60_000);
-  });
-});
+    it("selects this hook's own entry instead of assuming entry zero", () => {
+      writeManifest({
+        version: 1,
+        hooks: {
+          postToolUse: [
+            { matcher: 'Bash', command: 'node ./hooks/some-other-hook.cjs', timeout: 5 },
+            {
+              matcher: 'Shell|Read|Grep',
+              command: 'node ./hooks/gitnexus-hook.cjs',
+              timeout: 45,
+            },
+          ],
+        },
+      });
+      expect(hook.resolveCursorHostBudgetMs(installedHooksDir)).toBe(45_000);
+    });
+
+    it('keeps the adjacent manifest working for source-tree execution', () => {
+      // The repo ships the manifest next to the script, so that layout must
+      // still resolve — it is how the hook runs straight out of a checkout.
+      fs.writeFileSync(
+        path.join(installedHooksDir, 'hooks.json'),
+        JSON.stringify({
+          version: 1,
+          hooks: {
+            postToolUse: [
+              {
+                matcher: 'Shell|Read|Grep',
+                command: 'node ./hooks/gitnexus-hook.cjs',
+                timeout: 25,
+              },
+            ],
+          },
+        }),
+      );
+      expect(hook.resolveCursorHostBudgetMs(installedHooksDir)).toBe(25_000);
+    });
+
+    it('falls back to the shipped default when no manifest declares a timeout', () => {
+      expect(hook.resolveCursorHostBudgetMs(installedHooksDir)).toBe(60_000);
+    });
+  },
+);
 
 // ─── The npx budget must fit inside the shared lock's stale bound ──
 //
@@ -583,22 +592,25 @@ describe('Cursor hook host budget from the installed manifest', () => {
 // the hook's ENTIRE execution, or a concurrent hook evicts a live owner
 // and the per-repo concurrency cap is defeated.
 
-describe('Cursor hook slot lifetime vs the shared lock stale bound', () => {
-  it('keeps the whole npx fallback inside the lock stale threshold', () => {
-    const hook = require(CURSOR_HOOK) as { CURSOR_NPX_MAX_BUDGET_MS: number };
-    const lock = require(CURSOR_HOOK_LOCK) as { HOOK_LOCK_STALE_MS: number };
-    // Worst-case slot hold: the clamped npx budget + the spawnSync teardown
-    // allowance + the one-shot guard self-test.
-    const maxHoldMs = hook.CURSOR_NPX_MAX_BUDGET_MS + 2_000 + 3_000;
-    expect(lock.HOOK_LOCK_STALE_MS).toBeGreaterThan(maxHoldMs);
-  });
-});
+describe.runIf(fs.existsSync(CURSOR_HOOK))(
+  'Cursor hook slot lifetime vs the shared lock stale bound',
+  () => {
+    it('keeps the whole npx fallback inside the lock stale threshold', () => {
+      const hook = require(CURSOR_HOOK) as { CURSOR_NPX_MAX_BUDGET_MS: number };
+      const lock = require(CURSOR_HOOK_LOCK) as { HOOK_LOCK_STALE_MS: number };
+      // Worst-case slot hold: the clamped npx budget + the spawnSync teardown
+      // allowance + the one-shot guard self-test.
+      const maxHoldMs = hook.CURSOR_NPX_MAX_BUDGET_MS + 2_000 + 3_000;
+      expect(lock.HOOK_LOCK_STALE_MS).toBeGreaterThan(maxHoldMs);
+    });
+  },
+);
 
 // ─── Behavioral: npx fallback budget arithmetic ─────────────────────
 // resolveNpxTimeoutMs is the whole decision, pure and exported, so these
 // assert the real numbers rather than grepping the hook for substrings.
 
-describe('Cursor hook npx fallback budget', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook npx fallback budget', () => {
   const hook = require(CURSOR_HOOK) as {
     resolveNpxTimeoutMs: (hostBudgetMs: number, elapsedMs: number) => number | null;
   };
@@ -680,7 +692,7 @@ describe('Cursor hook npx fallback budget', () => {
   });
 });
 
-describe('Cursor npx spawn deadline', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor npx spawn deadline', () => {
   function runFallback({
     hostSeconds = 30,
     elapsedMs = 0,
@@ -807,7 +819,7 @@ describe('Cursor npx spawn deadline', () => {
 // resolveUnixGuardTimeout memoizes per module instance, so each case loads
 // a FRESH copy of the hook rather than reusing the top-of-file require.
 
-describe('Cursor hook guard timeout resolution', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook guard timeout resolution', () => {
   const isUnix = process.platform !== 'win32';
   const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
 
@@ -975,7 +987,7 @@ describe('Cursor hook guard timeout resolution', () => {
 
 // ─── Source code regression: concurrency guard (#1486) ─────────────
 
-describe('Cursor hook concurrency guard', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook concurrency guard', () => {
   const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
   const lockSource = fs.readFileSync(CURSOR_HOOK_LOCK, 'utf-8');
 
@@ -1032,7 +1044,7 @@ describe('Cursor hook concurrency guard', () => {
 
 // ─── Integration: concurrency guard skips when slots are full ──────
 
-describe('Cursor hook concurrency guard (integration)', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor hook concurrency guard (integration)', () => {
   it('exits silently when all MAX_INFLIGHT slots hold live pids', async () => {
     const { spawn } = await import('child_process');
     const lockDir = path.join(guardGitNexusDir, '.hook-locks');
@@ -1124,7 +1136,7 @@ describe('Cursor hook concurrency guard (integration)', () => {
 
 // ─── Shell pattern parsing ──────────────────────────────────────────
 
-describe('Shell quoted-pattern parser', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Shell quoted-pattern parser', () => {
   it.each([
     ['rg "User Service" src/', 'User Service'],
     ["grep 'error boundary' -- src/", 'error boundary'],
@@ -1198,7 +1210,7 @@ describe('Shell quoted-pattern parser', () => {
 
 // ─── Install docs ─────────────────────────────────────────────────────
 
-describe('Cursor integration install docs', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('Cursor integration install docs', () => {
   const integrationReadme = path.resolve(
     __dirname,
     '..',
@@ -1228,7 +1240,7 @@ describe('Cursor integration install docs', () => {
 
 // ─── Output parser sanity (synthetic JSON) ──────────────────────────
 
-describe('parseCursorOutput', () => {
+describe.runIf(fs.existsSync(CURSOR_HOOK))('parseCursorOutput', () => {
   it('parses a well-formed { additional_context } payload', () => {
     const parsed = parseCursorOutput('{"additional_context":"hello"}');
     expect(parsed).not.toBeNull();

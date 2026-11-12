@@ -13,6 +13,7 @@ import path from 'path';
 import { glob, globIterate } from 'glob';
 import { createIgnoreFilter } from '../../config/ignore-service.js';
 import { mapConcurrent } from '../../lib/utils.js';
+import { isLexicallyInside } from '../security/path-containment.js';
 
 import { logger } from '../logger.js';
 
@@ -116,6 +117,11 @@ export const walkRepositoryPaths = async (
   options: WalkRepositoryOptions = {},
 ): Promise<ScannedFile[]> => {
   await assertWalkRootIsDirectory(repoPath);
+  // SEC-001: the containment root is resolved once, then every entry is checked
+  // against it with the same primitive the HTTP/MCP paths use. Resolving it per
+  // file (and re-implementing the `..` test here) is how the walker drifted out
+  // of sync with `path-containment.ts` in the first place.
+  const repoRealRoot = await fs.realpath(repoPath);
   const ignoreFilter = await createIgnoreFilter(repoPath);
   const maxFileSizeBytes = options.maxFileSizeBytes ?? getMaxFileSizeBytes();
   const includeDotDirs = normalizeIncludeDotDirs(options.includeDotDirs ?? getIncludeDotDirs());
@@ -167,8 +173,17 @@ export const walkRepositoryPaths = async (
     const batch = filtered.slice(start, start + READ_CONCURRENCY);
     const results = await Promise.allSettled(
       batch.map(async (relativePath) => {
+        // SEC-001: a symlink inside the tree must not pull in a target outside
+        // it. `isLexicallyInside` rejects `..` and absolute relatives while
+        // still allowing a legitimate entry literally named `..foo`.
         const fullPath = path.join(repoPath, relativePath);
-        const stat = await fs.stat(fullPath);
+        const targetReal = await fs.realpath(fullPath);
+        if (!isLexicallyInside(repoRealRoot, targetReal)) {
+          skippedNonRegular++;
+          if (skippedNonRegularPreview.length < 5) skippedNonRegularPreview.push(relativePath);
+          return null;
+        }
+        const stat = await fs.stat(targetReal);
         // glob's nodir still returns symlinks to directories. Follow the same
         // target that hashing reads, retaining file symlinks but no directories
         // or special files that cannot belong to the indexed coverage set.
@@ -290,12 +305,19 @@ export const readFileContents = async (
   relativePaths: string[],
 ): Promise<Map<string, string>> => {
   const contents = new Map<string, string>();
+  // SEC-001: same root, same primitive as the walk — a link swapped in between
+  // scan and read is still rejected here.
+  const repoRealRoot = await fs.realpath(repoPath);
 
   const results = await mapConcurrent(
     relativePaths,
     async (relativePath) => {
       const fullPath = path.join(repoPath, relativePath);
-      const content = await fs.readFile(fullPath, 'utf-8');
+      const targetReal = await fs.realpath(fullPath);
+      if (!isLexicallyInside(repoRealRoot, targetReal)) {
+        throw new Error('Blocked out-of-tree symlink read: ' + relativePath);
+      }
+      const content = await fs.readFile(targetReal, 'utf-8');
       return { path: relativePath, content };
     },
     { concurrency: READ_CONCURRENCY },

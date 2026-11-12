@@ -124,6 +124,16 @@ export interface RepoMeta {
   /** Missing on legacy metadata means the upstream-compatible `full` profile. */
   contentRetention?: ContentRetention;
   contentRetentionSchemaVersion?: number;
+  /**
+   * Which sensitive-file exclusion policy this index was built under
+   * (core/security/content-policy.ts). Absent on indexes that predate SEC-002.
+   *
+   * Read-time filtering already blocks sensitive paths whatever this says;
+   * the stamp exists so a surface can say WHY content is missing and whether a
+   * re-analyze would clean the rows out. Absence must never be read as
+   * "current" — same direction as `contentRetentionSchemaVersion`.
+   */
+  securityPolicyVersion?: number;
   ftsProfile?: FtsProfile;
   /**
    * Runtime enrichment mode plus redacted scan exclusions. Payload data and

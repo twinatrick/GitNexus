@@ -1,0 +1,79 @@
+name: Security Verification
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - hardened/opencode-sec-audit
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  security-suite:
+    name: security (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup GitNexus
+        uses: ./.github/actions/setup-gitnexus
+
+      - name: Verify @scarf/scarf is absent from manifest, lockfile, and tree
+        shell: bash
+        working-directory: gitnexus
+        run: |
+          if grep -q '@scarf/scarf' package.json; then
+            echo "FAIL: @scarf/scarf still referenced in package.json" >&2
+            exit 1
+          fi
+          if grep -q '@scarf/scarf' package-lock.json; then
+            echo "FAIL: @scarf/scarf still present in package-lock.json" >&2
+            exit 1
+          fi
+          if [ -e node_modules/@scarf/scarf ]; then
+            echo "FAIL: node_modules/@scarf/scarf exists on disk" >&2
+            exit 1
+          fi
+          echo "OK: @scarf/scarf absent from manifest, lockfile, and tree"
+
+      - name: Typecheck
+        shell: bash
+        working-directory: gitnexus
+        run: npx tsc --noEmit -p tsconfig.test.json
+
+      - name: Run security regression suite
+        shell: bash
+        working-directory: gitnexus
+        run: |
+          npx vitest run \
+            test/unit/security-sensitive-files.test.ts \
+            test/unit/security-containment.test.ts \
+            test/unit/security-grep-scan.test.ts \
+            test/unit/security-ignore-secrets.test.ts \
+            test/unit/security-private-dirs.test.ts \
+            test/unit/security-content-policy.test.ts \
+            test/unit/security-analyze-path.test.ts \
+            test/unit/setup-airgap.test.ts \
+            test/unit/api-file-route.test.ts \
+            test/unit/mcp-repository-policy.test.ts \
+            test/unit/setup.test.ts \
+            test/unit/ignore-service.test.ts \
+            test/unit/middleware-public-origin.test.ts

@@ -3,6 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 describe('api query read-only wiring', () => {
+  beforeEach(() => {
+    process.env.GITNEXUS_MCP_READ_ONLY = '0';
+  });
+  afterEach(() => {
+    delete process.env.GITNEXUS_MCP_READ_ONLY;
+  });
   it('uses withLbugDb readOnly mode inside handleQueryRequest', async () => {
     const source = await fs.readFile(
       path.join(__dirname, '..', '..', 'src', 'server', 'api.ts'),

@@ -70,7 +70,9 @@ describe('search augmentation through the public hook', () => {
     ['bash', { command: 'rg -r replacement UserService src' }, 'UserService'],
     ['bash', { command: 'rg --hidden -i UserService src' }, 'UserService'],
   ])('augments %s %j with %s', async (tool, args, pattern) => {
-    expect(await invoke(tool, args)).toBe('hits\n\n[GitNexus] callers: A');
+    expect(await invoke(tool, args)).toBe(
+      'hits\n\n<untrusted_repo_metadata source="gitnexus-augment">\n[GitNexus] callers: A\n</untrusted_repo_metadata>',
+    );
     expect(execFileMock).toHaveBeenCalledTimes(1);
     expect(execFileMock.mock.calls[0][1].slice(-3)).toEqual(['augment', '--', pattern]);
     expect(execFileMock.mock.calls[0][2]).toMatchObject({
@@ -124,7 +126,9 @@ describe('search augmentation through the public hook', () => {
       (_cmd: string, _argv: string[], _options: unknown, callback: Callback) =>
         callback(null, '', 'diagnostic\n[GitNexus] callers: A\n'),
     );
-    expect(await invoke('grep', { pattern: 'UserService' }, '')).toBe('[GitNexus] callers: A');
+    expect(await invoke('grep', { pattern: 'UserService' }, '')).toBe(
+      '<untrusted_repo_metadata source="gitnexus-augment">\n[GitNexus] callers: A\n</untrusted_repo_metadata>',
+    );
   });
 
   it('discards unmarked diagnostics and never coerces structured results', async () => {

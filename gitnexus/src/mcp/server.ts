@@ -70,13 +70,37 @@ import {
  * Design: Each hint is a short, actionable instruction (not a suggestion).
  * The hint references the specific tool/resource to use next.
  */
+
+function sanitizeHintToken(val: unknown): string {
+  return String(val ?? '')
+    .replace(/[\x00-\x1F\x7F]/g, ' ')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, "'")
+    .slice(0, 120);
+}
+
+function wrapUntrustedMcpHint(raw: string): string {
+  if (!raw) return '';
+  return `\n\n---\n<untrusted_repo_metadata source="gitnexus-mcp-hint">\n${raw.replace(/^\n+---\n+/, '')}\n</untrusted_repo_metadata>`;
+}
+
 export function getNextStepHint(
   toolName: string,
   args: Record<string, any> | undefined,
   readOnly = false,
   toolResult?: unknown,
 ): string {
-  const repo = args?.repo;
+  return wrapUntrustedMcpHint(getRawNextStepHint(toolName, args, readOnly, toolResult));
+}
+
+function getRawNextStepHint(
+  toolName: string,
+  args: Record<string, any> | undefined,
+  readOnly = false,
+  toolResult?: unknown,
+): string {
+  const repo = args?.repo ? sanitizeHintToken(args.repo) : undefined;
   const repoParam = repo ? `, repo: "${repo}"` : '';
   const repoPath = repo || '{name}';
 
@@ -88,7 +112,7 @@ export function getNextStepHint(
       return `Use context({uid: "<id>"${repoParam}}) for a symbol's references and processes.${args?.include_content === true ? ` Source previews marked content_truncated are incomplete; use context({uid: "<id>", include_content: true${repoParam}}) or read_file with a bounded line range for more.` : ''}`;
 
     case 'context':
-      return `\n\n---\n**Next:** If planning changes, use impact({target: "${args?.name || '<name>'}", direction: "upstream"${repoParam}}) to check blast radius. To see execution flows, READ gitnexus://repo/${repoPath}/processes.`;
+      return `\n\n---\n**Next:** If planning changes, use impact({target: "${sanitizeHintToken(args?.name || '<name>')}", direction: "upstream"${repoParam}}) to check blast radius. To see execution flows, READ gitnexus://repo/${repoPath}/processes.`;
 
     case 'impact':
       return `\n\n---\n**Next:** Review d=1 items first (WILL BREAK). To check affected execution flows, READ gitnexus://repo/${repoPath}/processes.`;

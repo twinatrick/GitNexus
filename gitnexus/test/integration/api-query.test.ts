@@ -28,6 +28,7 @@ withTestLbugDB(
       let handleQueryRequest: typeof import('../../src/server/api.js').handleQueryRequest;
 
       beforeAll(async () => {
+    process.env.GITNEXUS_MCP_READ_ONLY = '0';
         ({ handleQueryRequest } = await import('../../src/server/api.js'));
         const app = express();
         app.use(express.json());
@@ -40,6 +41,7 @@ withTestLbugDB(
       });
 
       afterAll(async () => {
+    delete process.env.GITNEXUS_MCP_READ_ONLY;
         await stopServer(server);
       });
 

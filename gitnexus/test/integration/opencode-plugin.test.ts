@@ -27,6 +27,7 @@ describe('installed OpenCode plugin', () => {
       USERPROFILE: home,
       GITNEXUS_HOME: path.join(home, 'registry'),
       GITNEXUS_TEST_SKILLS_ROOT: skills,
+      GITNEXUS_ALLOW_NPX_FALLBACK: '1',
     };
     // Uninstall visits every editor; an inherited override would escape this fixture.
     delete env.CODEX_HOME;
@@ -95,7 +96,10 @@ describe('installed OpenCode plugin', () => {
       { env: { ...env, GITNEXUS_HOOK_CLI_PATH: fakeCli }, cwd: home },
     );
     expect(JSON.parse(stdout)).toEqual({
-      search: { output: 'hits\n\n[GitNexus] callers: A' },
+      search: {
+        output:
+          'hits\n\n<untrusted_repo_metadata source="gitnexus-augment">\n[GitNexus] callers: A\n</untrusted_repo_metadata>',
+      },
       mutation: {
         output:
           'committed\n\n[GitNexus] GitNexus index is stale (last indexed: abc1234). Run `gitnexus analyze` to update the knowledge graph.',

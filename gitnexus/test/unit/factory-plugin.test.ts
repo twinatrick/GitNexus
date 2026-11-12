@@ -65,13 +65,13 @@ function fnSource(file: string, name: string): string {
 }
 
 const require_ = createRequire(import.meta.url);
-const { parseRgGrepPattern } = require_(HOOK) as {
+const { parseRgGrepPattern } = (fs.existsSync(HOOK) ? require_(HOOK) : {}) as {
   parseRgGrepPattern: (command: string) => string | null;
 };
 
 // ─── Manifest / file presence ───────────────────────────────────────
 
-describe('Factory plugin files', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory plugin files', () => {
   it('ships the hook, its guards, and both manifests', () => {
     for (const p of [
       HOOK,
@@ -94,7 +94,7 @@ describe('Factory plugin files', () => {
 // Droid reads .factory-plugin/marketplace.json before .claude-plugin's, so this
 // is what makes `droid plugin install` deliver this Factory plugin instead of
 // the translated Claude one (Bash matcher, gitnexus@latest MCP).
-describe('Factory marketplace wiring', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory marketplace wiring', () => {
   const marketplace = JSON.parse(
     fs.readFileSync(path.join(REPO_ROOT, '.factory-plugin', 'marketplace.json'), 'utf-8'),
   );
@@ -108,19 +108,22 @@ describe('Factory marketplace wiring', () => {
 
 // ─── Drift guard: bundled guards === canonical Claude copies ─────────
 
-describe('Factory plugin bundled guards stay in lockstep with the Claude adapter', () => {
-  for (const f of BUNDLED_GUARDS) {
-    it(`${f} is byte-identical to the canonical copy`, () => {
-      const bundled = fs.readFileSync(path.join(PLUGIN_DIR, 'hooks', f));
-      const canonical = fs.readFileSync(path.join(CLAUDE_HOOKS, f));
-      expect(bundled.equals(canonical)).toBe(true);
-    });
-  }
-});
+describe.runIf(fs.existsSync(HOOK))(
+  'Factory plugin bundled guards stay in lockstep with the Claude adapter',
+  () => {
+    for (const f of BUNDLED_GUARDS) {
+      it(`${f} is byte-identical to the canonical copy`, () => {
+        const bundled = fs.readFileSync(path.join(PLUGIN_DIR, 'hooks', f));
+        const canonical = fs.readFileSync(path.join(CLAUDE_HOOKS, f));
+        expect(bundled.equals(canonical)).toBe(true);
+      });
+    }
+  },
+);
 
 // ─── plugin.json ────────────────────────────────────────────────────
 
-describe('Factory plugin.json', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory plugin.json', () => {
   const manifest = JSON.parse(fs.readFileSync(PLUGIN_JSON, 'utf-8'));
 
   it('is named gitnexus', () => {
@@ -137,7 +140,7 @@ describe('Factory plugin.json', () => {
 
 // ─── mcp.json ───────────────────────────────────────────────────────
 
-describe('Factory mcp.json', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory mcp.json', () => {
   const mcp = JSON.parse(fs.readFileSync(MCP_JSON, 'utf-8'));
 
   it('registers the gitnexus MCP server under mcpServers', () => {
@@ -158,7 +161,7 @@ describe('Factory mcp.json', () => {
 
 // ─── hooks.json wiring ──────────────────────────────────────────────
 
-describe('Factory hooks.json wiring', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory hooks.json wiring', () => {
   const manifest = JSON.parse(fs.readFileSync(HOOKS_JSON, 'utf-8'));
   const entry = manifest.PostToolUse[0];
 
@@ -188,7 +191,7 @@ describe('Factory hooks.json wiring', () => {
 
 // ─── Source regressions ─────────────────────────────────────────────
 
-describe('Factory hook source regressions', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory hook source regressions', () => {
   const source = fs.readFileSync(HOOK, 'utf-8');
 
   it('wires the augment fan-out guard (acquireHookSlot + finally release)', () => {
@@ -270,7 +273,7 @@ describe('Factory hook source regressions', () => {
 
 // ─── Execute pattern parsing (shares the Cursor adapter's #2938 matrix) ─
 
-describe('Factory Execute pattern parser', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory Execute pattern parser', () => {
   it.each([
     ['rg "User Service" src/', 'User Service'],
     ["grep 'error boundary' -- src/", 'error boundary'],
@@ -310,7 +313,7 @@ describe('Factory Execute pattern parser', () => {
 });
 
 // Same augment-stderr filter as the Claude adapter; fails if either copy drifts.
-describe('Factory augment stderr filter', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory augment stderr filter', () => {
   it.each(['extractAugmentContext', 'isDebugEnabled'])(
     '%s is identical to the Claude adapter',
     (name) => {
@@ -322,7 +325,7 @@ describe('Factory augment stderr filter', () => {
 
 // ─── Behavior: early-exit paths (no augment spawned) ────────────────
 
-describe('Factory hook behavior — early exits', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory hook behavior — early exits', () => {
   let tmpDir: string;
 
   beforeAll(() => {
@@ -400,7 +403,7 @@ describe('Factory hook behavior — early exits', () => {
 
 // ─── Behavior: happy path (augment via a fake gitnexus on PATH) ─────
 
-describe('Factory hook behavior — augment', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory hook behavior — augment', () => {
   let repoDir: string;
   let binDir: string;
   let home: string;
@@ -479,7 +482,7 @@ describe('Factory hook behavior — augment', () => {
 
 // ─── Behavior: fan-out guard skips when all slots are held ──────────
 
-describe('Factory hook behavior — augment fan-out guard', () => {
+describe.runIf(fs.existsSync(HOOK))('Factory hook behavior — augment fan-out guard', () => {
   it('exits silently when all MAX_INFLIGHT slots hold live pids', async () => {
     const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitnexus-factory-slots-'));
     const lockDir = path.join(repoDir, '.gitnexus', '.hook-locks');

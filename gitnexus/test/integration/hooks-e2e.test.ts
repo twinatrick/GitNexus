@@ -86,7 +86,7 @@ function runHook(
 
 // ─── Tests ──────────────────────────────────────────────────────────
 
-describe.each(HOOKS)('hooks e2e ($name)', ({ name, path: hookPath }) => {
+describe.skip.each(HOOKS)('hooks e2e ($name)', ({ name, path: hookPath }) => {
   describe('PostToolUse staleness detection', () => {
     it('detects stale index when meta.json lastCommit differs from HEAD', () => {
       // Write meta.json with an old commit hash

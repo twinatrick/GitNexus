@@ -36,6 +36,8 @@ export const PARSE_CACHE_BASE_FILES = [
   'core/analyzer-identity.ts',
   'core/analysis-features.ts',
   'core/embeddings/line-index.ts',
+  'core/security/path-containment.ts',
+  'core/security/sensitive-files.ts',
   'config/ignore-service.ts',
   'config/repo-control-file.ts',
   'types/pipeline.ts',
