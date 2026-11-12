@@ -198,7 +198,9 @@ describe('syncPluginManifests (#2445)', () => {
     expect(() => syncPluginManifests(root)).toThrow(/not valid JSON/);
   });
 
-  it('matches the real repository layout and passes the check on a synced tree', () => {
+  it.runIf(fs.existsSync(path.join(repoRoot, 'gitnexus-claude-plugin')))(
+    'matches the real repository layout and passes the check on a synced tree',
+    () => {
     const repoRoot = path.resolve(__dirname, '..', '..', '..');
 
     const result = syncPluginManifests(repoRoot, { check: true });
