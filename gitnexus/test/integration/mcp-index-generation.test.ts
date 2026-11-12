@@ -29,8 +29,10 @@ describe('MCP index generation freshness', () => {
   let temp: Awaited<ReturnType<typeof createTempDir>>;
   let repo: string;
   let ftsLoaded = false;
+  process.env.GITNEXUS_MCP_READ_ONLY = '0';
+  process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY = '1';
   const backend = new LocalBackend();
-  const server = createMCPServer(backend, { readOnly: false });
+  const server = createMCPServer(backend);
   const client = new Client({ name: 'index-generation-regression', version: '1.0.0' });
 
   beforeAll(async () => {

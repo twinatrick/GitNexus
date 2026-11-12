@@ -106,9 +106,7 @@ describe('setupCommand coding-agent selection', () => {
     await setupCommand({ codingAgent: ['opencode,unknown'] });
 
     expect(process.exitCode).toBe(1);
-    expect(stderr).toHaveBeenCalledWith(
-      expect.stringContaining('Valid values: opencode'),
-    );
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('Valid values: opencode'));
     await expect(
       fs.access(path.join(tempHome, '.config', 'opencode', 'opencode.json')),
     ).rejects.toThrow();

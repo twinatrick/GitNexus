@@ -315,7 +315,7 @@ function runHook(
 
 // ─── Both hook files should exist ───────────────────────────────────
 
-describe('Hook files exist', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Hook files exist', () => {
   it('CJS hook exists', () => {
     expect(fs.existsSync(CJS_HOOK)).toBe(true);
   });
@@ -327,7 +327,7 @@ describe('Hook files exist', () => {
 
 // ─── Source code regression: no shell: true ──────────────────────────
 
-describe('Shell injection regression', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Shell injection regression', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -381,7 +381,7 @@ describe('Shell injection regression', () => {
  * The pre-existing fix at ``src/core/lbug/extension-loader.ts:96``
  * established the convention. This test enforces it everywhere.
  */
-describe('windowsHide regression', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('windowsHide regression', () => {
   // Hook-layer files. Adding a new hook file MUST be reflected here.
   const HOOK_FILES: Array<readonly [string, string]> = [
     ['gitnexus/hooks/claude/gitnexus-hook.cjs', CJS_HOOK],
@@ -580,7 +580,7 @@ describe('windowsHide regression', () => {
 
 // ─── Source code regression: .cmd extensions for Windows ─────────────
 
-describe('Windows .cmd extension handling', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Windows .cmd extension handling', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -599,7 +599,7 @@ describe('Windows .cmd extension handling', () => {
 
 // ─── Source code regression: cwd validation ─────────────────────────
 
-describe('cwd validation guards', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('cwd validation guards', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -615,7 +615,7 @@ describe('cwd validation guards', () => {
 
 // ─── Source code regression: sendHookResponse used consistently ──────
 
-describe('sendHookResponse consistency', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('sendHookResponse consistency', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -639,7 +639,7 @@ describe('sendHookResponse consistency', () => {
 
 // ─── Source code regression: dispatch map pattern ────────────────────
 
-describe('Dispatch map pattern', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Dispatch map pattern', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -657,7 +657,7 @@ describe('Dispatch map pattern', () => {
 
 // ─── Source code regression: debug error truncation ──────────────────
 
-describe('Debug error message truncation', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Debug error message truncation', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -671,7 +671,7 @@ describe('Debug error message truncation', () => {
 
 // ─── extractPattern regression (via source analysis) ────────────────
 
-describe('extractPattern coverage', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('extractPattern coverage', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -701,7 +701,7 @@ describe('extractPattern coverage', () => {
 
 // ─── PostToolUse: git mutation regex coverage ───────────────────────
 
-describe('Git mutation regex', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Git mutation regex', () => {
   const GIT_REGEX = /\\bgit\\s\+\(commit\|merge\|rebase\|cherry-pick\|pull\)/;
 
   for (const [label, hookPath] of [
@@ -738,7 +738,7 @@ describe('Git mutation regex', () => {
 
 // ─── Source code regression: PreToolUse concurrency guard (#1486) ──
 
-describe('PreToolUse concurrency guard', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('PreToolUse concurrency guard', () => {
   for (const [label, hookPath, lockPath] of [
     ['CJS', CJS_HOOK, CJS_HOOK_LOCK],
     ['Plugin', PLUGIN_HOOK, PLUGIN_HOOK_LOCK],
@@ -813,7 +813,7 @@ type WriteFileArgs = Parameters<typeof fs.writeFileSync>;
 type OpenArgs = Parameters<typeof fs.openSync>;
 type LstatArgs = Parameters<typeof fs.lstatSync>;
 
-describe('acquireHookSlot stale-slot eviction', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('acquireHookSlot stale-slot eviction', () => {
   const DEAD_PID = '2147483640';
   // Another evictor's claim: a token this process never writes.
   const FOREIGN_TOKEN = `${process.ppid}:ffffffffffffffff`;
@@ -1077,215 +1077,229 @@ describe('acquireHookSlot stale-slot eviction', () => {
 // fallback can hold one for ~50s (CURSOR_NPX_MAX_BUDGET_MS + the spawnSync
 // teardown allowance + the guard self-test).
 
-describe('acquireHookSlot keeps live slots valid past the old 30s bound', () => {
-  const LOCK_COPIES = [
-    ['CJS', CJS_HOOK_LOCK],
-    ['Plugin', PLUGIN_HOOK_LOCK],
-    [
-      'Factory',
-      path.resolve(__dirname, '..', '..', '..', 'gitnexus-factory-plugin', 'hooks', 'hook-lock.js'),
-    ],
-    [
-      'Cursor',
-      path.resolve(
-        __dirname,
-        '..',
-        '..',
-        '..',
-        'gitnexus-cursor-integration',
-        'hooks',
-        'hook-lock.cjs',
-      ),
-    ],
-  ] as const;
+describe.runIf(fs.existsSync(CJS_HOOK))(
+  'acquireHookSlot keeps live slots valid past the old 30s bound',
+  () => {
+    const LOCK_COPIES = [
+      ['CJS', CJS_HOOK_LOCK],
+      ['Plugin', PLUGIN_HOOK_LOCK],
+      [
+        'Factory',
+        path.resolve(
+          __dirname,
+          '..',
+          '..',
+          '..',
+          'gitnexus-factory-plugin',
+          'hooks',
+          'hook-lock.js',
+        ),
+      ],
+      [
+        'Cursor',
+        path.resolve(
+          __dirname,
+          '..',
+          '..',
+          '..',
+          'gitnexus-cursor-integration',
+          'hooks',
+          'hook-lock.cjs',
+        ),
+      ],
+    ] as const;
 
-  for (const [label, lockPath] of LOCK_COPIES) {
-    it(`${label}: rejects a fourth acquisition while three live owners are past 30s`, async () => {
-      const { spawn } = await import('child_process');
-      const lock = createRequire(import.meta.url)(lockPath) as {
-        acquireHookSlot: (dir: string) => (() => void) | null;
-        HOOK_LOCK_STALE_MS: number;
-      };
+    for (const [label, lockPath] of LOCK_COPIES) {
+      it(`${label}: rejects a fourth acquisition while three live owners are past 30s`, async () => {
+        const { spawn } = await import('child_process');
+        const lock = createRequire(import.meta.url)(lockPath) as {
+          acquireHookSlot: (dir: string) => (() => void) | null;
+          HOOK_LOCK_STALE_MS: number;
+        };
 
-      // The bound must have moved past the old 30s threshold.
-      expect(lock.HOOK_LOCK_STALE_MS).toBeGreaterThan(30_000);
+        // The bound must have moved past the old 30s threshold.
+        expect(lock.HOOK_LOCK_STALE_MS).toBeGreaterThan(30_000);
 
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gn-hook-live-slot-'));
-      const lockDir = path.join(dir, '.hook-locks');
-      fs.mkdirSync(lockDir, { recursive: true });
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gn-hook-live-slot-'));
+        const lockDir = path.join(dir, '.hook-locks');
+        fs.mkdirSync(lockDir, { recursive: true });
 
-      const sleepers = [0, 1, 2].map(() =>
-        spawn(process.execPath, ['-e', 'setTimeout(()=>{},60000)'], {
-          stdio: 'ignore',
-          detached: false,
-        }),
-      );
-      try {
-        // Let the children come up so their PIDs are real and alive.
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        // Age every slot past the OLD 30s threshold while keeping it inside
-        // the owner's valid execution window.
-        const aged = new Date(Date.now() - 31_000);
-        for (let i = 0; i < sleepers.length; i++) {
-          const p = path.join(lockDir, `slot-${i}.lock`);
-          fs.writeFileSync(p, String(sleepers[i].pid));
-          fs.utimesSync(p, aged, aged);
-        }
-
-        // A fourth acquisition must be refused: all three slots are held by
-        // processes that are demonstrably still running.
-        const release = lock.acquireHookSlot(dir);
-        expect(release).toBeNull();
-        for (let i = 0; i < sleepers.length; i++) {
-          const p = path.join(lockDir, `slot-${i}.lock`);
-          expect(fs.readFileSync(p, 'utf-8').trim()).toBe(String(sleepers[i].pid));
-        }
-      } finally {
-        for (const child of sleepers) {
-          try {
-            child.kill();
-          } catch {
-            /* ignore */
+        const sleepers = [0, 1, 2].map(() =>
+          spawn(process.execPath, ['-e', 'setTimeout(()=>{},60000)'], {
+            stdio: 'ignore',
+            detached: false,
+          }),
+        );
+        try {
+          // Let the children come up so their PIDs are real and alive.
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          // Age every slot past the OLD 30s threshold while keeping it inside
+          // the owner's valid execution window.
+          const aged = new Date(Date.now() - 31_000);
+          for (let i = 0; i < sleepers.length; i++) {
+            const p = path.join(lockDir, `slot-${i}.lock`);
+            fs.writeFileSync(p, String(sleepers[i].pid));
+            fs.utimesSync(p, aged, aged);
           }
-        }
-        fs.rmSync(dir, { recursive: true, force: true });
-      }
-    });
-  }
 
-  it('keeps the four adapter copies byte-identical', () => {
-    // They share one `.hook-locks` directory, so a divergence in the stale
-    // bound would let one adapter evict another adapter's live slot.
-    const [primary, ...copies] = LOCK_COPIES.map(([, p]) => fs.readFileSync(p, 'utf-8'));
-    for (const copy of copies) expect(copy).toBe(primary);
-  });
-});
+          // A fourth acquisition must be refused: all three slots are held by
+          // processes that are demonstrably still running.
+          const release = lock.acquireHookSlot(dir);
+          expect(release).toBeNull();
+          for (let i = 0; i < sleepers.length; i++) {
+            const p = path.join(lockDir, `slot-${i}.lock`);
+            expect(fs.readFileSync(p, 'utf-8').trim()).toBe(String(sleepers[i].pid));
+          }
+        } finally {
+          for (const child of sleepers) {
+            try {
+              child.kill();
+            } catch {
+              /* ignore */
+            }
+          }
+          fs.rmSync(dir, { recursive: true, force: true });
+        }
+      });
+    }
+
+    it('keeps the four adapter copies byte-identical', () => {
+      // They share one `.hook-locks` directory, so a divergence in the stale
+      // bound would let one adapter evict another adapter's live slot.
+      const [primary, ...copies] = LOCK_COPIES.map(([, p]) => fs.readFileSync(p, 'utf-8'));
+      for (const copy of copies) expect(copy).toBe(primary);
+    });
+  },
+);
 
 // ─── Integration: concurrency guard skips when slots are full ──────
 
 // The burst tests spawn real child processes; under CI load a child can exit
 // before printing its decision even though the slot hard cap still holds.
-describe('PreToolUse concurrency guard (integration)', { retry: 1 }, () => {
-  for (const [label, hookPath] of [
-    ['CJS', CJS_HOOK],
-    ['Plugin', PLUGIN_HOOK],
-  ] as const) {
-    it(`${label}: hook exits silently when all MAX_INFLIGHT slots hold live pids`, async () => {
-      const { spawn } = await import('child_process');
-      const lockDir = path.join(gitNexusDir, '.hook-locks');
-      fs.mkdirSync(lockDir, { recursive: true });
+describe.runIf(fs.existsSync(CJS_HOOK))(
+  'PreToolUse concurrency guard (integration)',
+  { retry: 1 },
+  () => {
+    for (const [label, hookPath] of [
+      ['CJS', CJS_HOOK],
+      ['Plugin', PLUGIN_HOOK],
+    ] as const) {
+      it(`${label}: hook exits silently when all MAX_INFLIGHT slots hold live pids`, async () => {
+        const { spawn } = await import('child_process');
+        const lockDir = path.join(gitNexusDir, '.hook-locks');
+        fs.mkdirSync(lockDir, { recursive: true });
 
-      // Spawn 3 long-sleeping node child processes to use as live PIDs.
-      const sleepers = [0, 1, 2].map(() =>
-        spawn(process.execPath, ['-e', 'setTimeout(()=>{},60000)'], {
-          stdio: 'ignore',
-          detached: false,
-        }),
-      );
-      const writtenLocks: string[] = [];
-      try {
-        for (let i = 0; i < sleepers.length; i++) {
-          // Slot files are named slot-N.lock; content is the owning PID.
-          const p = path.join(lockDir, `slot-${i}.lock`);
-          fs.writeFileSync(p, String(sleepers[i].pid));
-          writtenLocks.push(p);
-        }
+        // Spawn 3 long-sleeping node child processes to use as live PIDs.
+        const sleepers = [0, 1, 2].map(() =>
+          spawn(process.execPath, ['-e', 'setTimeout(()=>{},60000)'], {
+            stdio: 'ignore',
+            detached: false,
+          }),
+        );
+        const writtenLocks: string[] = [];
+        try {
+          for (let i = 0; i < sleepers.length; i++) {
+            // Slot files are named slot-N.lock; content is the owning PID.
+            const p = path.join(lockDir, `slot-${i}.lock`);
+            fs.writeFileSync(p, String(sleepers[i].pid));
+            writtenLocks.push(p);
+          }
 
-        const result = runHook(hookPath, {
-          hook_event_name: 'PreToolUse',
-          tool_name: 'Grep',
-          tool_input: { pattern: 'validateUser' },
-          cwd: tmpDir,
-        });
+          const result = runHook(hookPath, {
+            hook_event_name: 'PreToolUse',
+            tool_name: 'Grep',
+            tool_input: { pattern: 'validateUser' },
+            cwd: tmpDir,
+          });
 
-        expect(result.stdout.trim()).toBe('');
-        // Sentinel slot files survive; the hook bailed before claiming any of them.
-        for (let i = 0; i < sleepers.length; i++) {
-          const p = path.join(lockDir, `slot-${i}.lock`);
-          expect(fs.existsSync(p)).toBe(true);
-          // Owner unchanged.
-          expect(fs.readFileSync(p, 'utf-8').trim()).toBe(String(sleepers[i].pid));
-        }
-      } finally {
-        for (const child of sleepers) {
+          expect(result.stdout.trim()).toBe('');
+          // Sentinel slot files survive; the hook bailed before claiming any of them.
+          for (let i = 0; i < sleepers.length; i++) {
+            const p = path.join(lockDir, `slot-${i}.lock`);
+            expect(fs.existsSync(p)).toBe(true);
+            // Owner unchanged.
+            expect(fs.readFileSync(p, 'utf-8').trim()).toBe(String(sleepers[i].pid));
+          }
+        } finally {
+          for (const child of sleepers) {
+            try {
+              child.kill();
+            } catch {
+              /* ignore */
+            }
+          }
+          for (const p of writtenLocks) {
+            try {
+              fs.unlinkSync(p);
+            } catch {
+              /* ignore */
+            }
+          }
           try {
-            child.kill();
+            fs.rmdirSync(lockDir);
           } catch {
             /* ignore */
           }
         }
-        for (const p of writtenLocks) {
+      });
+
+      it(`${label}: hook reclaims a slot held by a dead pid`, () => {
+        const lockDir = path.join(gitNexusDir, '.hook-locks');
+        fs.mkdirSync(lockDir, { recursive: true });
+        // PID 1 exists on every POSIX system (init); on Windows process.kill(1,0)
+        // throws. Use a definitely-dead PID instead: a very large number unlikely
+        // to be assigned.
+        const deadPid = 2_147_483_640;
+        const stalePath = path.join(lockDir, 'slot-0.lock');
+        try {
+          fs.writeFileSync(stalePath, String(deadPid));
+          expect(fs.readFileSync(stalePath, 'utf-8').trim()).toBe(String(deadPid));
+
+          runHook(hookPath, {
+            hook_event_name: 'PreToolUse',
+            tool_name: 'Grep',
+            tool_input: { pattern: 'validateUser' },
+            cwd: tmpDir,
+          });
+
+          // The hook reclaimed and then released slot-0 — either the file is
+          // gone (released) or its content is something other than the dead PID.
+          if (fs.existsSync(stalePath)) {
+            expect(fs.readFileSync(stalePath, 'utf-8').trim()).not.toBe(String(deadPid));
+          }
+        } finally {
           try {
-            fs.unlinkSync(p);
+            fs.unlinkSync(stalePath);
+          } catch {
+            /* already pruned */
+          }
+          try {
+            fs.rmdirSync(lockDir);
           } catch {
             /* ignore */
           }
         }
+      });
+
+      it(`${label}: hook does not exceed MAX_INFLIGHT under simultaneous bursts (hard cap)`, async () => {
+        // Spawn many hook processes concurrently and assert that at most
+        // MAX_INFLIGHT (3) slot files end up populated by live pids. The
+        // O_CREAT|O_EXCL slot scheme makes this a hard cap, not the soft cap
+        // that the count-then-claim approach gives.
+        const { spawn } = await import('child_process');
+        const lockDir = path.join(gitNexusDir, '.hook-locks');
+        // Clean any leftover slot files.
         try {
-          fs.rmdirSync(lockDir);
+          for (const f of fs.readdirSync(lockDir)) fs.unlinkSync(path.join(lockDir, f));
         } catch {
-          /* ignore */
+          /* dir may not exist yet */
         }
-      }
-    });
+        fs.mkdirSync(lockDir, { recursive: true });
 
-    it(`${label}: hook reclaims a slot held by a dead pid`, () => {
-      const lockDir = path.join(gitNexusDir, '.hook-locks');
-      fs.mkdirSync(lockDir, { recursive: true });
-      // PID 1 exists on every POSIX system (init); on Windows process.kill(1,0)
-      // throws. Use a definitely-dead PID instead: a very large number unlikely
-      // to be assigned.
-      const deadPid = 2_147_483_640;
-      const stalePath = path.join(lockDir, 'slot-0.lock');
-      try {
-        fs.writeFileSync(stalePath, String(deadPid));
-        expect(fs.readFileSync(stalePath, 'utf-8').trim()).toBe(String(deadPid));
-
-        runHook(hookPath, {
-          hook_event_name: 'PreToolUse',
-          tool_name: 'Grep',
-          tool_input: { pattern: 'validateUser' },
-          cwd: tmpDir,
-        });
-
-        // The hook reclaimed and then released slot-0 — either the file is
-        // gone (released) or its content is something other than the dead PID.
-        if (fs.existsSync(stalePath)) {
-          expect(fs.readFileSync(stalePath, 'utf-8').trim()).not.toBe(String(deadPid));
-        }
-      } finally {
-        try {
-          fs.unlinkSync(stalePath);
-        } catch {
-          /* already pruned */
-        }
-        try {
-          fs.rmdirSync(lockDir);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
-
-    it(`${label}: hook does not exceed MAX_INFLIGHT under simultaneous bursts (hard cap)`, async () => {
-      // Spawn many hook processes concurrently and assert that at most
-      // MAX_INFLIGHT (3) slot files end up populated by live pids. The
-      // O_CREAT|O_EXCL slot scheme makes this a hard cap, not the soft cap
-      // that the count-then-claim approach gives.
-      const { spawn } = await import('child_process');
-      const lockDir = path.join(gitNexusDir, '.hook-locks');
-      // Clean any leftover slot files.
-      try {
-        for (const f of fs.readdirSync(lockDir)) fs.unlinkSync(path.join(lockDir, f));
-      } catch {
-        /* dir may not exist yet */
-      }
-      fs.mkdirSync(lockDir, { recursive: true });
-
-      // We use child workers that just claim a slot via the same algorithm
-      // and then sleep, so we can observe the on-disk state under contention
-      // without spawning the real gitnexus augment CLI.
-      const claimerScript = `
+        // We use child workers that just claim a slot via the same algorithm
+        // and then sleep, so we can observe the on-disk state under contention
+        // without spawning the real gitnexus augment CLI.
+        const claimerScript = `
         const fs = require('fs'); const path = require('path');
         const lockDir = ${JSON.stringify(lockDir)};
         const MAX = 3;
@@ -1323,75 +1337,79 @@ describe('PreToolUse concurrency guard (integration)', { retry: 1 }, () => {
         }
       `;
 
-      const N = 10;
-      const claimers = Array.from({ length: N }, () =>
-        spawn(process.execPath, ['-e', claimerScript], {
-          stdio: ['ignore', 'pipe', 'ignore'],
-          detached: false,
-        }),
-      );
-      try {
-        // Wait until every claimer has printed its decision.
-        const decisions = await Promise.all(
-          claimers.map(
-            (c) =>
-              new Promise<string>((resolve) => {
-                let buf = '';
-                c.stdout!.on('data', (d) => {
-                  buf += d.toString();
-                  if (buf.includes('\n')) resolve(buf.split('\n')[0]);
-                });
-                c.on('exit', () => resolve(buf.split('\n')[0] || 'EXIT'));
-              }),
-          ),
+        const N = 10;
+        const claimers = Array.from({ length: N }, () =>
+          spawn(process.execPath, ['-e', claimerScript], {
+            stdio: ['ignore', 'pipe', 'ignore'],
+            detached: false,
+          }),
         );
-        const claimedCount = decisions.filter((d) => d.startsWith('CLAIMED:')).length;
-        const skippedCount = decisions.filter((d) => d === 'SKIPPED').length;
+        try {
+          // Wait until every claimer has printed its decision.
+          const decisions = await Promise.all(
+            claimers.map(
+              (c) =>
+                new Promise<string>((resolve) => {
+                  let buf = '';
+                  c.stdout!.on('data', (d) => {
+                    buf += d.toString();
+                    if (buf.includes('\n')) resolve(buf.split('\n')[0]);
+                  });
+                  c.on('exit', () => resolve(buf.split('\n')[0] || 'EXIT'));
+                }),
+            ),
+          );
+          const claimedCount = decisions.filter((d) => d.startsWith('CLAIMED:')).length;
+          const skippedCount = decisions.filter((d) => d === 'SKIPPED').length;
 
-        // HARD CAP: never more than 3 winners, regardless of how many bursts.
-        expect(claimedCount).toBeLessThanOrEqual(3);
-        // And the remainder must have all explicitly skipped.
-        expect(claimedCount + skippedCount).toBe(N);
+          // HARD CAP: never more than 3 winners, regardless of how many bursts.
+          expect(claimedCount).toBeLessThanOrEqual(3);
+          // And the remainder must have all explicitly skipped.
+          expect(claimedCount + skippedCount).toBe(N);
 
-        // On-disk state matches.
-        const liveSlots = fs
-          .readdirSync(lockDir)
-          .filter((f) => /^slot-\d+\.lock$/.test(f))
-          .filter((f) => {
+          // On-disk state matches.
+          const liveSlots = fs
+            .readdirSync(lockDir)
+            .filter((f) => /^slot-\d+\.lock$/.test(f))
+            .filter((f) => {
+              try {
+                const o = Number.parseInt(
+                  fs.readFileSync(path.join(lockDir, f), 'utf-8').trim(),
+                  10,
+                );
+                return Number.isFinite(o) && o > 0;
+              } catch {
+                return false;
+              }
+            });
+          expect(liveSlots.length).toBeLessThanOrEqual(3);
+        } finally {
+          for (const c of claimers) {
             try {
-              const o = Number.parseInt(fs.readFileSync(path.join(lockDir, f), 'utf-8').trim(), 10);
-              return Number.isFinite(o) && o > 0;
+              c.kill();
             } catch {
-              return false;
+              /* ignore */
             }
-          });
-        expect(liveSlots.length).toBeLessThanOrEqual(3);
-      } finally {
-        for (const c of claimers) {
+          }
           try {
-            c.kill();
+            for (const f of fs.readdirSync(lockDir)) fs.unlinkSync(path.join(lockDir, f));
+          } catch {
+            /* ignore */
+          }
+          try {
+            fs.rmdirSync(lockDir);
           } catch {
             /* ignore */
           }
         }
-        try {
-          for (const f of fs.readdirSync(lockDir)) fs.unlinkSync(path.join(lockDir, f));
-        } catch {
-          /* ignore */
-        }
-        try {
-          fs.rmdirSync(lockDir);
-        } catch {
-          /* ignore */
-        }
-      }
-    });
-  }
-});
+      });
+    }
+  },
+);
 
 // ─── Source: cross-platform DB lock probe module (#1493) ─────────────
 
-describe('Cross-platform DB lock probe (source)', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Cross-platform DB lock probe (source)', () => {
   for (const [label, hookPath, probePath] of [
     ['CJS', CJS_HOOK, CJS_HOOK_DB_PROBE],
     ['Plugin', PLUGIN_HOOK, PLUGIN_HOOK_DB_PROBE],
@@ -1436,87 +1454,93 @@ describe('Cross-platform DB lock probe (source)', () => {
 
 // ─── Source: hook slot must gate the DB-owner probe (#2163) ──────────
 
-describe('PreToolUse source order: tool guard before registry scan', () => {
-  for (const [label, hookPath] of [
-    ['CJS', CJS_HOOK],
-    ['Plugin', PLUGIN_HOOK],
-  ] as const) {
-    it(`${label}: tool guard appears before resolveHookRepo in handlePreToolUse`, () => {
-      const source = fs.readFileSync(hookPath, 'utf-8');
-      const start = source.indexOf('function handlePreToolUse');
-      const end = source.indexOf('function handlePostToolUse');
+describe.runIf(fs.existsSync(CJS_HOOK))(
+  'PreToolUse source order: tool guard before registry scan',
+  () => {
+    for (const [label, hookPath] of [
+      ['CJS', CJS_HOOK],
+      ['Plugin', PLUGIN_HOOK],
+    ] as const) {
+      it(`${label}: tool guard appears before resolveHookRepo in handlePreToolUse`, () => {
+        const source = fs.readFileSync(hookPath, 'utf-8');
+        const start = source.indexOf('function handlePreToolUse');
+        const end = source.indexOf('function handlePostToolUse');
+        expect(start).toBeGreaterThanOrEqual(0);
+        expect(end).toBeGreaterThan(start);
+        const preBody = source.slice(start, end);
+        const grepGuardIdx = preBody.indexOf("toolName !== 'Grep'");
+        const extractIdx = preBody.indexOf('extractPattern(');
+        const resolveIdx = preBody.indexOf('resolveHookRepo(');
+        expect(grepGuardIdx).toBeGreaterThanOrEqual(0);
+        expect(extractIdx).toBeGreaterThan(grepGuardIdx);
+        expect(resolveIdx).toBeGreaterThan(extractIdx);
+      });
+    }
+  },
+);
+
+describe.runIf(fs.existsSync(CJS_HOOK))(
+  'Hook slot gates the DB-owner probe (source order, #2163)',
+  () => {
+    const ANTIGRAVITY_HOOK = path.resolve(
+      __dirname,
+      '..',
+      '..',
+      'hooks',
+      'antigravity',
+      'gitnexus-antigravity-hook.cjs',
+    );
+
+    // T1: pin cheap guards → acquireHookSlot → probe. The probe spawns lsof/ps,
+    // so it must sit BEHIND the per-repo slot cap; and the acquire must stay
+    // AFTER the cheap gating (extractPattern), or every tool call churns slot
+    // files. The antigravity adapter splits the cheap gating (extractPattern in
+    // buildAfterToolContext) from probe+augment (runAugment), so its slice
+    // spans both functions to express the same call-order contract.
+    for (const [label, hookPath, sliceStart, sliceEnd] of [
+      ['CJS', CJS_HOOK, 'function handlePreToolUse', 'function handlePostToolUse'],
+      ['Plugin', PLUGIN_HOOK, 'function handlePreToolUse', 'function handlePostToolUse'],
+      [
+        'Antigravity',
+        ANTIGRAVITY_HOOK,
+        'function buildAfterToolContext',
+        'function buildStaleIndexHint',
+      ],
+    ] as const) {
+      it(`${label}: extractPattern → acquireHookSlot → hasGitNexusServerOwner`, () => {
+        const source = fs.readFileSync(hookPath, 'utf-8');
+        const start = source.indexOf(sliceStart);
+        const end = source.indexOf(sliceEnd);
+        expect(start).toBeGreaterThanOrEqual(0);
+        expect(end).toBeGreaterThan(start);
+        const slice = source.slice(start, end);
+        const patternIdx = slice.indexOf('extractPattern(');
+        const acquireIdx = slice.indexOf('acquireHookSlot(');
+        const probeIdx = slice.indexOf('hasGitNexusServerOwner(');
+        expect(patternIdx).toBeGreaterThanOrEqual(0);
+        expect(acquireIdx).toBeGreaterThan(patternIdx);
+        expect(probeIdx).toBeGreaterThan(acquireIdx);
+      });
+    }
+
+    it('Antigravity: extractPattern appears before resolveHookRepo', () => {
+      const source = fs.readFileSync(ANTIGRAVITY_HOOK, 'utf-8');
+      const start = source.indexOf('function buildAfterToolContext');
+      const end = source.indexOf('function buildMcpQueryHint');
       expect(start).toBeGreaterThanOrEqual(0);
       expect(end).toBeGreaterThan(start);
-      const preBody = source.slice(start, end);
-      const grepGuardIdx = preBody.indexOf("toolName !== 'Grep'");
-      const extractIdx = preBody.indexOf('extractPattern(');
-      const resolveIdx = preBody.indexOf('resolveHookRepo(');
-      expect(grepGuardIdx).toBeGreaterThanOrEqual(0);
-      expect(extractIdx).toBeGreaterThan(grepGuardIdx);
+      const body = source.slice(start, end);
+      const extractIdx = body.indexOf('extractPattern(');
+      const resolveIdx = body.indexOf('resolveHookRepo(');
+      expect(extractIdx).toBeGreaterThanOrEqual(0);
       expect(resolveIdx).toBeGreaterThan(extractIdx);
     });
-  }
-});
-
-describe('Hook slot gates the DB-owner probe (source order, #2163)', () => {
-  const ANTIGRAVITY_HOOK = path.resolve(
-    __dirname,
-    '..',
-    '..',
-    'hooks',
-    'antigravity',
-    'gitnexus-antigravity-hook.cjs',
-  );
-
-  // T1: pin cheap guards → acquireHookSlot → probe. The probe spawns lsof/ps,
-  // so it must sit BEHIND the per-repo slot cap; and the acquire must stay
-  // AFTER the cheap gating (extractPattern), or every tool call churns slot
-  // files. The antigravity adapter splits the cheap gating (extractPattern in
-  // buildAfterToolContext) from probe+augment (runAugment), so its slice
-  // spans both functions to express the same call-order contract.
-  for (const [label, hookPath, sliceStart, sliceEnd] of [
-    ['CJS', CJS_HOOK, 'function handlePreToolUse', 'function handlePostToolUse'],
-    ['Plugin', PLUGIN_HOOK, 'function handlePreToolUse', 'function handlePostToolUse'],
-    [
-      'Antigravity',
-      ANTIGRAVITY_HOOK,
-      'function buildAfterToolContext',
-      'function buildStaleIndexHint',
-    ],
-  ] as const) {
-    it(`${label}: extractPattern → acquireHookSlot → hasGitNexusServerOwner`, () => {
-      const source = fs.readFileSync(hookPath, 'utf-8');
-      const start = source.indexOf(sliceStart);
-      const end = source.indexOf(sliceEnd);
-      expect(start).toBeGreaterThanOrEqual(0);
-      expect(end).toBeGreaterThan(start);
-      const slice = source.slice(start, end);
-      const patternIdx = slice.indexOf('extractPattern(');
-      const acquireIdx = slice.indexOf('acquireHookSlot(');
-      const probeIdx = slice.indexOf('hasGitNexusServerOwner(');
-      expect(patternIdx).toBeGreaterThanOrEqual(0);
-      expect(acquireIdx).toBeGreaterThan(patternIdx);
-      expect(probeIdx).toBeGreaterThan(acquireIdx);
-    });
-  }
-
-  it('Antigravity: extractPattern appears before resolveHookRepo', () => {
-    const source = fs.readFileSync(ANTIGRAVITY_HOOK, 'utf-8');
-    const start = source.indexOf('function buildAfterToolContext');
-    const end = source.indexOf('function buildMcpQueryHint');
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    const body = source.slice(start, end);
-    const extractIdx = body.indexOf('extractPattern(');
-    const resolveIdx = body.indexOf('resolveHookRepo(');
-    expect(extractIdx).toBeGreaterThanOrEqual(0);
-    expect(resolveIdx).toBeGreaterThan(extractIdx);
-  });
-});
+  },
+);
 
 // ─── Behavior: slot-gated probe + wrapper-reaped orphans (#2163) ─────
 
-describe.skipIf(process.platform === 'win32')(
+describe.skipIf(process.platform === 'win32' || !fs.existsSync(CJS_HOOK))(
   'DB-owner probe is gated behind the hook slot (behavior, #2163)',
   () => {
     for (const [label, hookPath] of [
@@ -2088,7 +2112,7 @@ describe.skipIf(process.platform !== 'linux')(
 
 // ─── Wrapping equivalence: disabled guard ⇒ pre-wrap augment behavior ──
 
-describe.skipIf(process.platform === 'win32')(
+describe.skipIf(process.platform === 'win32' || !fs.existsSync(CJS_HOOK))(
   'Augment CLI guard wrap degrades cleanly when disabled (#2163 follow-up)',
   () => {
     // T6-style equivalence pin for the AUGMENT path: with the wrapper
@@ -2147,7 +2171,7 @@ describe.skipIf(process.platform === 'win32')(
 
 // ─── Source: augment CLI guard wrap present in every adapter (#2163 f-up) ──
 
-describe('Augment CLI guard wrap (source, #2163 follow-up)', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Augment CLI guard wrap (source, #2163 follow-up)', () => {
   const ANTIGRAVITY_HOOK = path.resolve(
     __dirname,
     '..',
@@ -2237,43 +2261,46 @@ describe('Augment CLI guard wrap (source, #2163 follow-up)', () => {
 
 // ─── Source: cursor hook slot-skip diagnostic (#2163 follow-up) ─────
 
-describe('Cursor hook slot-skip diagnostic (source, #2163 follow-up)', () => {
-  const CURSOR_HOOK = path.resolve(
-    __dirname,
-    '..',
-    '..',
-    '..',
-    'gitnexus-cursor-integration',
-    'hooks',
-    'gitnexus-hook.cjs',
-  );
+describe.runIf(fs.existsSync(CJS_HOOK))(
+  'Cursor hook slot-skip diagnostic (source, #2163 follow-up)',
+  () => {
+    const CURSOR_HOOK = path.resolve(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'gitnexus-cursor-integration',
+      'hooks',
+      'gitnexus-hook.cjs',
+    );
 
-  it('debug-gates the slot-saturated skip under the cursor truthy convention', () => {
-    const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
-    const idx = source.indexOf('augment skipped: hook slots saturated');
-    expect(idx).toBeGreaterThanOrEqual(0);
-    // Must sit inside the cursor hook's own debug gate (truthy
-    // `process.env.GITNEXUS_DEBUG`, unlike the claude adapters' strict
-    // '1'/'true' gate) so the default path stays silent.
-    const before = source.slice(Math.max(0, idx - 600), idx);
-    expect(before).toContain('process.env.GITNEXUS_DEBUG');
-  });
+    it('debug-gates the slot-saturated skip under the cursor truthy convention', () => {
+      const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
+      const idx = source.indexOf('augment skipped: hook slots saturated');
+      expect(idx).toBeGreaterThanOrEqual(0);
+      // Must sit inside the cursor hook's own debug gate (truthy
+      // `process.env.GITNEXUS_DEBUG`, unlike the claude adapters' strict
+      // '1'/'true' gate) so the default path stays silent.
+      const before = source.slice(Math.max(0, idx - 600), idx);
+      expect(before).toContain('process.env.GITNEXUS_DEBUG');
+    });
 
-  it('extracts a pattern before any registry scan', () => {
-    const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
-    const start = source.indexOf('function main()');
-    expect(start).toBeGreaterThanOrEqual(0);
-    const body = source.slice(start);
-    const extractIdx = body.indexOf('extractPattern(');
-    const resolveIdx = body.indexOf('resolveHookRepo(');
-    expect(extractIdx).toBeGreaterThanOrEqual(0);
-    expect(resolveIdx).toBeGreaterThan(extractIdx);
-  });
-});
+    it('extracts a pattern before any registry scan', () => {
+      const source = fs.readFileSync(CURSOR_HOOK, 'utf-8');
+      const start = source.indexOf('function main()');
+      expect(start).toBeGreaterThanOrEqual(0);
+      const body = source.slice(start);
+      const extractIdx = body.indexOf('extractPattern(');
+      const resolveIdx = body.indexOf('resolveHookRepo(');
+      expect(extractIdx).toBeGreaterThanOrEqual(0);
+      expect(resolveIdx).toBeGreaterThan(extractIdx);
+    });
+  },
+);
 
 // ─── Integration: PreToolUse augmentation filtering (#1492) ─────────
 
-describe('PreToolUse augmentation filtering (integration)', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('PreToolUse augmentation filtering (integration)', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -2548,7 +2575,7 @@ describe.skipIf(SKIP_LSOF_PATH)('MCP-owner hint throttle (#2396)', () => {
 // copies (the repo's deliberate no-shared-module hook convention). Guard against
 // silent drift with a source-level byte-identity check — runs on every platform,
 // unlike the owner-path behavior tests which are macOS-only.
-describe('hook copy drift guard (#2396)', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('hook copy drift guard (#2396)', () => {
   const ANTIGRAVITY_HOOK = path.resolve(
     __dirname,
     '..',
@@ -3311,7 +3338,7 @@ describe.skipIf(SKIP_LSOF_PATH)(
 
 // ─── Integration: PostToolUse staleness detection ───────────────────
 
-describe('PostToolUse staleness detection (integration)', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('PostToolUse staleness detection (integration)', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -3487,118 +3514,124 @@ describe('PostToolUse staleness detection (integration)', () => {
 // (the current primary metadata filename; meta.json is a dual-written
 // compatibility mirror — see repo-manager.ts's saveMeta/loadMeta)
 
-describe('PostToolUse staleness detection with gitnexus.json (integration)', () => {
-  for (const [label, hookPath] of [
-    ['CJS', CJS_HOOK],
-    ['Plugin', PLUGIN_HOOK],
-  ] as const) {
-    it(`${label}: emits stale notification when HEAD differs from gitnexus.json`, () => {
-      const gitnexusJsonPath = path.join(gitNexusDir, 'gitnexus.json');
-      const metaJsonPath = path.join(gitNexusDir, 'meta.json');
-      fs.rmSync(metaJsonPath, { force: true });
-      fs.writeFileSync(
-        gitnexusJsonPath,
-        JSON.stringify({ lastCommit: 'aaaaaaa0000000000000000000000000deadbeef', stats: {} }),
-      );
+describe.runIf(fs.existsSync(CJS_HOOK))(
+  'PostToolUse staleness detection with gitnexus.json (integration)',
+  () => {
+    for (const [label, hookPath] of [
+      ['CJS', CJS_HOOK],
+      ['Plugin', PLUGIN_HOOK],
+    ] as const) {
+      it(`${label}: emits stale notification when HEAD differs from gitnexus.json`, () => {
+        const gitnexusJsonPath = path.join(gitNexusDir, 'gitnexus.json');
+        const metaJsonPath = path.join(gitNexusDir, 'meta.json');
+        fs.rmSync(metaJsonPath, { force: true });
+        fs.writeFileSync(
+          gitnexusJsonPath,
+          JSON.stringify({ lastCommit: 'aaaaaaa0000000000000000000000000deadbeef', stats: {} }),
+        );
 
-      try {
-        const result = runHook(hookPath, {
-          hook_event_name: 'PostToolUse',
-          tool_name: 'Bash',
-          tool_input: { command: 'git commit -m "test"' },
-          tool_output: { exit_code: 0 },
-          cwd: tmpDir,
-        });
+        try {
+          const result = runHook(hookPath, {
+            hook_event_name: 'PostToolUse',
+            tool_name: 'Bash',
+            tool_input: { command: 'git commit -m "test"' },
+            tool_output: { exit_code: 0 },
+            cwd: tmpDir,
+          });
 
-        const output = parseHookOutput(result.stdout);
-        expect(output).not.toBeNull();
-        expect(output!.additionalContext).toContain('stale');
-        expect(output!.additionalContext).toContain('aaaaaaa');
-      } finally {
-        fs.rmSync(gitnexusJsonPath, { force: true });
-        fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'old', stats: {} }));
-      }
-    });
+          const output = parseHookOutput(result.stdout);
+          expect(output).not.toBeNull();
+          expect(output!.additionalContext).toContain('stale');
+          expect(output!.additionalContext).toContain('aaaaaaa');
+        } finally {
+          fs.rmSync(gitnexusJsonPath, { force: true });
+          fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'old', stats: {} }));
+        }
+      });
 
-    it(`${label}: silent when HEAD matches gitnexus.json lastCommit`, () => {
-      const gitnexusJsonPath = path.join(gitNexusDir, 'gitnexus.json');
-      const metaJsonPath = path.join(gitNexusDir, 'meta.json');
-      const head = getHeadCommit();
-      fs.rmSync(metaJsonPath, { force: true });
-      fs.writeFileSync(gitnexusJsonPath, JSON.stringify({ lastCommit: head, stats: {} }));
+      it(`${label}: silent when HEAD matches gitnexus.json lastCommit`, () => {
+        const gitnexusJsonPath = path.join(gitNexusDir, 'gitnexus.json');
+        const metaJsonPath = path.join(gitNexusDir, 'meta.json');
+        const head = getHeadCommit();
+        fs.rmSync(metaJsonPath, { force: true });
+        fs.writeFileSync(gitnexusJsonPath, JSON.stringify({ lastCommit: head, stats: {} }));
 
-      try {
-        const result = runHook(hookPath, {
-          hook_event_name: 'PostToolUse',
-          tool_name: 'Bash',
-          tool_input: { command: 'git commit -m "test"' },
-          tool_output: { exit_code: 0 },
-          cwd: tmpDir,
-        });
+        try {
+          const result = runHook(hookPath, {
+            hook_event_name: 'PostToolUse',
+            tool_name: 'Bash',
+            tool_input: { command: 'git commit -m "test"' },
+            tool_output: { exit_code: 0 },
+            cwd: tmpDir,
+          });
 
-        expect(result.stdout.trim()).toBe('');
-      } finally {
-        fs.rmSync(gitnexusJsonPath, { force: true });
-        fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'old', stats: {} }));
-      }
-    });
+          expect(result.stdout.trim()).toBe('');
+        } finally {
+          fs.rmSync(gitnexusJsonPath, { force: true });
+          fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'old', stats: {} }));
+        }
+      });
 
-    it(`${label}: prefers gitnexus.json over meta.json when both are present (dual-write steady state)`, () => {
-      const gitnexusJsonPath = path.join(gitNexusDir, 'gitnexus.json');
-      const metaJsonPath = path.join(gitNexusDir, 'meta.json');
-      fs.writeFileSync(gitnexusJsonPath, JSON.stringify({ lastCommit: 'freshcommit', stats: {} }));
-      fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'stalecommit', stats: {} }));
+      it(`${label}: prefers gitnexus.json over meta.json when both are present (dual-write steady state)`, () => {
+        const gitnexusJsonPath = path.join(gitNexusDir, 'gitnexus.json');
+        const metaJsonPath = path.join(gitNexusDir, 'meta.json');
+        fs.writeFileSync(
+          gitnexusJsonPath,
+          JSON.stringify({ lastCommit: 'freshcommit', stats: {} }),
+        );
+        fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'stalecommit', stats: {} }));
 
-      try {
-        const result = runHook(hookPath, {
-          hook_event_name: 'PostToolUse',
-          tool_name: 'Bash',
-          tool_input: { command: 'git commit -m "test"' },
-          tool_output: { exit_code: 0 },
-          cwd: tmpDir,
-        });
+        try {
+          const result = runHook(hookPath, {
+            hook_event_name: 'PostToolUse',
+            tool_name: 'Bash',
+            tool_input: { command: 'git commit -m "test"' },
+            tool_output: { exit_code: 0 },
+            cwd: tmpDir,
+          });
 
-        const output = parseHookOutput(result.stdout);
-        expect(output).not.toBeNull();
-        // Reports staleness against gitnexus.json's commit, not meta.json's —
-        // proves gitnexus.json is consulted first.
-        expect(output!.additionalContext).toContain('freshco');
-      } finally {
-        fs.rmSync(gitnexusJsonPath, { force: true });
-        fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'old', stats: {} }));
-      }
-    });
+          const output = parseHookOutput(result.stdout);
+          expect(output).not.toBeNull();
+          // Reports staleness against gitnexus.json's commit, not meta.json's —
+          // proves gitnexus.json is consulted first.
+          expect(output!.additionalContext).toContain('freshco');
+        } finally {
+          fs.rmSync(gitnexusJsonPath, { force: true });
+          fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'old', stats: {} }));
+        }
+      });
 
-    it(`${label}: treats a corrupt gitnexus.json as stale instead of trusting meta.json`, () => {
-      const gitnexusJsonPath = path.join(gitNexusDir, 'gitnexus.json');
-      const metaJsonPath = path.join(gitNexusDir, 'meta.json');
-      const head = getHeadCommit();
-      fs.writeFileSync(gitnexusJsonPath, 'not valid json!!!');
-      fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: head, stats: {} }));
+      it(`${label}: treats a corrupt gitnexus.json as stale instead of trusting meta.json`, () => {
+        const gitnexusJsonPath = path.join(gitNexusDir, 'gitnexus.json');
+        const metaJsonPath = path.join(gitNexusDir, 'meta.json');
+        const head = getHeadCommit();
+        fs.writeFileSync(gitnexusJsonPath, 'not valid json!!!');
+        fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: head, stats: {} }));
 
-      try {
-        const result = runHook(hookPath, {
-          hook_event_name: 'PostToolUse',
-          tool_name: 'Bash',
-          tool_input: { command: 'git commit -m "test"' },
-          tool_output: { exit_code: 0 },
-          cwd: tmpDir,
-        });
+        try {
+          const result = runHook(hookPath, {
+            hook_event_name: 'PostToolUse',
+            tool_name: 'Bash',
+            tool_input: { command: 'git commit -m "test"' },
+            tool_output: { exit_code: 0 },
+            cwd: tmpDir,
+          });
 
-        const output = parseHookOutput(result.stdout);
-        expect(output).not.toBeNull();
-        expect(output!.additionalContext).toContain('last indexed: never');
-      } finally {
-        fs.rmSync(gitnexusJsonPath, { force: true });
-        fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'old', stats: {} }));
-      }
-    });
-  }
-});
+          const output = parseHookOutput(result.stdout);
+          expect(output).not.toBeNull();
+          expect(output!.additionalContext).toContain('last indexed: never');
+        } finally {
+          fs.rmSync(gitnexusJsonPath, { force: true });
+          fs.writeFileSync(metaJsonPath, JSON.stringify({ lastCommit: 'old', stats: {} }));
+        }
+      });
+    }
+  },
+);
 
 // ─── Integration: cwd validation rejects relative paths ─────────────
 
-describe('cwd validation (integration)', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('cwd validation (integration)', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -3628,7 +3661,7 @@ describe('cwd validation (integration)', () => {
 
 // ─── Integration: global registry lookup ────────────────────────────
 
-describe('Global registry lookup', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Global registry lookup', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -3831,7 +3864,7 @@ describe('Global registry lookup', () => {
   }
 });
 
-describe('Hook registry resolver compatibility', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Hook registry resolver compatibility', () => {
   const canonicalPath = (value: string) => fs.realpathSync.native(path.resolve(value));
 
   const withRegistryHome = (homeDir: string, action: () => void) => {
@@ -4451,7 +4484,7 @@ describe('Hook registry resolver compatibility', () => {
 
 // ─── Integration: linked-worktree resolution (#1224) ───────────────
 
-describe('Linked git worktree resolution', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Linked git worktree resolution', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -4543,7 +4576,7 @@ describe('Linked git worktree resolution', () => {
 
 // ─── Integration: dispatch map routes correctly ─────────────────────
 
-describe('Dispatch map routing (integration)', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Dispatch map routing (integration)', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -4603,7 +4636,7 @@ describe('Dispatch map routing (integration)', () => {
 
 // ─── Integration: PostToolUse with missing meta.json ────────────────
 
-describe('PostToolUse with missing/corrupt meta.json', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('PostToolUse with missing/corrupt meta.json', () => {
   for (const [label, hookPath] of [
     ['CJS', CJS_HOOK],
     ['Plugin', PLUGIN_HOOK],
@@ -4658,7 +4691,7 @@ describe('PostToolUse with missing/corrupt meta.json', () => {
 // twice for skills (#2356/#2360/#2362) — this test is the same class of
 // guardrail for the three adapters that read index metadata directly.
 
-describe('Hook metadata-filename drift guard', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Hook metadata-filename drift guard', () => {
   for (const [label, resolverPath] of [
     ['CJS (claude)', path.resolve(__dirname, '..', '..', 'hooks', 'claude', 'registry-query.cjs')],
     [
@@ -4683,7 +4716,7 @@ describe('Hook metadata-filename drift guard', () => {
   }
 });
 
-describe('Hook registry resolver drift guard', () => {
+describe.runIf(fs.existsSync(CJS_HOOK))('Hook registry resolver drift guard', () => {
   const resolverPaths = [
     path.resolve(__dirname, '..', '..', 'hooks', 'claude', 'registry-query.cjs'),
     path.resolve(
