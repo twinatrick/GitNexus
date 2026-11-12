@@ -110,11 +110,11 @@ describeBlock('POST /api/analyze branch validation (real server)', () => {
       {
         cwd: REPO_ROOT,
         env: {
-        ...process.env,
-        GITNEXUS_HOME: homeDir,
-        GITNEXUS_ALLOW_REMOTE_CLONE: '1',
-        NODE_OPTIONS: '',
-      },
+          ...process.env,
+          GITNEXUS_HOME: homeDir,
+          GITNEXUS_ALLOW_REMOTE_CLONE: '1',
+          NODE_OPTIONS: '',
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );

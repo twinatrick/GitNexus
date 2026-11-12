@@ -137,60 +137,61 @@ describe.skip('registry-query shared store graph (#3352)', () => {
 describe.skipIf(process.platform === 'win32' || !fs.existsSync(CANONICAL))(
   'registry-query slot name parity (#3374)',
   () => {
-  const realPlatform = process.platform;
-  const savedHome = process.env.GITNEXUS_HOME;
-  const savedStoragePath = process.env.GITNEXUS_STORAGE_PATH;
-  const savedStorageRoot = process.env.GITNEXUS_STORAGE_ROOT;
-  let tmp: string;
+    const realPlatform = process.platform;
+    const savedHome = process.env.GITNEXUS_HOME;
+    const savedStoragePath = process.env.GITNEXUS_STORAGE_PATH;
+    const savedStorageRoot = process.env.GITNEXUS_STORAGE_ROOT;
+    let tmp: string;
 
-  beforeEach(() => {
-    tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gn-hook-slot-')));
-    process.env.GITNEXUS_HOME = path.join(tmp, 'home');
-    process.env.GITNEXUS_STORAGE_ROOT = path.join(tmp, 'root');
-    delete process.env.GITNEXUS_STORAGE_PATH;
-  });
+    beforeEach(() => {
+      tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gn-hook-slot-')));
+      process.env.GITNEXUS_HOME = path.join(tmp, 'home');
+      process.env.GITNEXUS_STORAGE_ROOT = path.join(tmp, 'root');
+      delete process.env.GITNEXUS_STORAGE_PATH;
+    });
 
-  afterEach(() => {
-    Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true });
-    if (savedHome === undefined) delete process.env.GITNEXUS_HOME;
-    else process.env.GITNEXUS_HOME = savedHome;
-    if (savedStoragePath === undefined) delete process.env.GITNEXUS_STORAGE_PATH;
-    else process.env.GITNEXUS_STORAGE_PATH = savedStoragePath;
-    if (savedStorageRoot === undefined) delete process.env.GITNEXUS_STORAGE_ROOT;
-    else process.env.GITNEXUS_STORAGE_ROOT = savedStorageRoot;
-    fs.rmSync(tmp, { recursive: true, force: true });
-  });
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true });
+      if (savedHome === undefined) delete process.env.GITNEXUS_HOME;
+      else process.env.GITNEXUS_HOME = savedHome;
+      if (savedStoragePath === undefined) delete process.env.GITNEXUS_STORAGE_PATH;
+      else process.env.GITNEXUS_STORAGE_PATH = savedStoragePath;
+      if (savedStorageRoot === undefined) delete process.env.GITNEXUS_STORAGE_ROOT;
+      else process.env.GITNEXUS_STORAGE_ROOT = savedStorageRoot;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    });
 
-  const basenames = [
-    'CON',
-    'con.txt',
-    'NUL.tar.gz',
-    'COM1',
-    'LPT9.log',
-    'aux',
-    'prn.',
-    'normal',
-    'CONSOLE',
-    'com0.txt',
-  ];
-  const rows = (['win32', 'linux'] as const).flatMap((platform) =>
-    basenames.map((basename) => [platform, basename] as const),
-  );
-
-  it.each(rows)('on %s resolves the slot storage-slot.ts names for %s', (platform, basename) => {
-    Object.defineProperty(process, 'platform', { value: platform, configurable: true });
-    const checkout = path.join(tmp, 'repos', basename);
-    const slot = path.join(tmp, 'root', slotNameForCanonicalPath(checkout));
-    fs.mkdirSync(slot, { recursive: true });
-    fs.writeFileSync(
-      path.join(slot, 'gitnexus.json'),
-      JSON.stringify({ repoPath: checkout, storagePath: slot, lastCommit: 'abc' }),
+    const basenames = [
+      'CON',
+      'con.txt',
+      'NUL.tar.gz',
+      'COM1',
+      'LPT9.log',
+      'aux',
+      'prn.',
+      'normal',
+      'CONSOLE',
+      'com0.txt',
+    ];
+    const rows = (['win32', 'linux'] as const).flatMap((platform) =>
+      basenames.map((basename) => [platform, basename] as const),
     );
-    fs.mkdirSync(path.join(tmp, 'home'), { recursive: true });
-    fs.writeFileSync(
-      path.join(tmp, 'home', 'registry.json'),
-      JSON.stringify([{ name: basename, path: checkout, indexedAt: '', lastCommit: '' }]),
-    );
-    expect(load(HOOK_COPIES[0]).findRegisteredRepo(checkout)?.storagePath).toBe(slot);
-  });
-});
+
+    it.each(rows)('on %s resolves the slot storage-slot.ts names for %s', (platform, basename) => {
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+      const checkout = path.join(tmp, 'repos', basename);
+      const slot = path.join(tmp, 'root', slotNameForCanonicalPath(checkout));
+      fs.mkdirSync(slot, { recursive: true });
+      fs.writeFileSync(
+        path.join(slot, 'gitnexus.json'),
+        JSON.stringify({ repoPath: checkout, storagePath: slot, lastCommit: 'abc' }),
+      );
+      fs.mkdirSync(path.join(tmp, 'home'), { recursive: true });
+      fs.writeFileSync(
+        path.join(tmp, 'home', 'registry.json'),
+        JSON.stringify([{ name: basename, path: checkout, indexedAt: '', lastCommit: '' }]),
+      );
+      expect(load(HOOK_COPIES[0]).findRegisteredRepo(checkout)?.storagePath).toBe(slot);
+    });
+  },
+);
