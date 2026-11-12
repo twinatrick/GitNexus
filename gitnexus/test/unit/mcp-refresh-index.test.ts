@@ -1,7 +1,7 @@
 import type http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import express from 'express';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -55,6 +55,11 @@ async function connect(
     },
   };
 }
+
+beforeEach(() => {
+  vi.stubEnv('GITNEXUS_MCP_READ_ONLY', '0');
+  vi.stubEnv('GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY', '1');
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();

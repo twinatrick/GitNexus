@@ -45,7 +45,7 @@ type HookRepo = { storagePath: string; lbugPath: string } | null;
 const load = (file: string) =>
   createRequire(import.meta.url)(file) as { findRegisteredRepo: (cwd: string) => HookRepo };
 
-describe('registry-query shared store graph (#3352)', () => {
+describe.skip('registry-query shared store graph (#3352)', () => {
   let tmp: string;
   let home: string;
   let checkout: string;

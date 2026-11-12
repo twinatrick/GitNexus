@@ -1519,6 +1519,9 @@ jobs:
           if [[ -r "${apparmor_userns}" ]] && [[ "$(<"${apparmor_userns}")" == '1' ]]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
+          if [[ -f /etc/apparmor.d/bwrap ]]; then
+            sudo apparmor_parser -R /etc/apparmor.d/bwrap || true
+          fi
           canary_runtime="${RUNNER_TEMP}/claude-canary"
           install -d -m 0700 "${canary_runtime}"
           install -m 0600 \

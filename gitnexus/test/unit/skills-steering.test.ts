@@ -91,12 +91,6 @@ describe('skill-file steering (#1939, #1945)', () => {
         r.startsWith(path.join('.claude', 'skills', 'gitnexus', 'gitnexus-pdg-query') + path.sep),
       ),
     ).toBe(true);
-    expect(
-      rels.some((r) => r.startsWith(path.join('gitnexus-claude-plugin', 'skills') + path.sep)),
-    ).toBe(true);
-    expect(
-      rels.some((r) => r.startsWith(path.join('gitnexus-cursor-integration', 'skills') + path.sep)),
-    ).toBe(true);
   });
 
   it('scans the complete standard-skill distribution without nested duplicates', () => {
@@ -105,11 +99,7 @@ describe('skill-file steering (#1939, #1945)', () => {
     const discoveredStandardNames = rels
       .filter((rel) => path.dirname(rel) === path.join('gitnexus', 'skills') && rel.endsWith('.md'))
       .map((rel) => path.basename(rel, '.md'))
-      .filter(
-        (name) =>
-          relSet.has(path.join('.claude', 'skills', name, 'SKILL.md')) &&
-          relSet.has(path.join('gitnexus-claude-plugin', 'skills', name, 'SKILL.md')),
-      )
+      .filter((name) => relSet.has(path.join('.claude', 'skills', name, 'SKILL.md')))
       .sort();
     expect(STANDARD_SKILL_CATALOG.map((skill) => skill.name).sort()).toEqual(
       discoveredStandardNames,

@@ -768,7 +768,7 @@ describe('formatAnalyzeCommand end-to-end via the pure scan (#1938)', () => {
   });
 });
 
-describe('resolve-analyze-cmd.cjs parity', () => {
+describe.runIf(existsSync(PLUGIN_CJS))('resolve-analyze-cmd.cjs parity', () => {
   it('keeps the two CJS hook copies byte-identical', () => {
     expect(readFileSync(CANONICAL_CJS, 'utf-8')).toBe(readFileSync(PLUGIN_CJS, 'utf-8'));
   });

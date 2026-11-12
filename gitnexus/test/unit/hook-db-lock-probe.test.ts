@@ -21,6 +21,7 @@ import { spawn, spawnSync } from 'child_process';
 import { createFakeProcRoot, type FakeProcEntry } from '../utils/hook-test-helpers.js';
 
 const PROBE_PATH = path.resolve(__dirname, '..', '..', 'hooks', 'claude', 'hook-db-lock-probe.cjs');
+const HAS_PROBE = fs.existsSync(PROBE_PATH);
 
 type Probe = {
   hasGitNexusDbLockedByGitNexusServer: (dbPath: string, myPid: number) => boolean;
@@ -30,7 +31,7 @@ type Probe = {
   resolveHookBinary?: (tool: 'lsof' | 'ps') => string;
   hasMissingHookBinaryOverride?: (tool: 'lsof' | 'ps') => boolean;
 };
-const probe = createRequire(import.meta.url)(PROBE_PATH) as Probe;
+const probe = HAS_PROBE ? (createRequire(import.meta.url)(PROBE_PATH) as Probe) : ({} as Probe);
 
 // The probe now exports linuxProcScanFindGitNexusServer unconditionally (F1
 // white-box verdict assertions). Narrow it once here to a non-optional typed
@@ -104,7 +105,7 @@ const GITNEXUS_MCP_ARGV = (script: string) => ['node', script, 'mcp'];
 // then resolveHookBinary. If the lookup did NOT trim, a padded-but-valid
 // override such as " /tmp/lsof " passed the missing-check yet fell through to
 // the built-in/PATH binary. Both helpers must see the same trimmed path.
-describe('hook binary override trimming (white-box, #2543 review)', () => {
+describe.runIf(HAS_PROBE)('hook binary override trimming (white-box, #2543 review)', () => {
   const resolveBin = probe.resolveHookBinary as (tool: 'lsof' | 'ps') => string;
   const missing = probe.hasMissingHookBinaryOverride as (tool: 'lsof' | 'ps') => boolean;
 
@@ -157,7 +158,7 @@ describe('hook binary override trimming (white-box, #2543 review)', () => {
 // check and self-test ran in. The resolution is memoized per module instance,
 // so each case runs in a fresh `node` child whose cwd holds a self-testing
 // guard script (`-k <k> <budget> cmd…` -> exec cmd…).
-describe.skipIf(process.platform === 'win32')(
+describe.skipIf(!HAS_PROBE || process.platform === 'win32')(
   'GITNEXUS_HOOK_TIMEOUT_PATH relative override resolves to absolute (#2543 review)',
   () => {
     it.each(['./fake-guard', 'fake-guard'])('override %s -> path.resolve(value)', (value) => {
@@ -183,7 +184,7 @@ describe.skipIf(process.platform === 'win32')(
   },
 );
 
-describe('numeric env parsing (white-box, #2183 review)', () => {
+describe.runIf(HAS_PROBE)('numeric env parsing (white-box, #2183 review)', () => {
   const budget = probe.resolveLinuxProcBudgetMs as () => number;
   const cmdlineMax = probe.getCmdlineMaxBytes as () => number;
 
@@ -261,7 +262,7 @@ describe('numeric env parsing (white-box, #2183 review)', () => {
   );
 });
 
-describe.skipIf(!isLinux)('Linux cmdline-first DB-owner scan (#2180)', () => {
+describe.skipIf(!HAS_PROBE || !isLinux)('Linux cmdline-first DB-owner scan (#2180)', () => {
   // ── D1: three-phase correctness ──────────────────────────────────
 
   it('owned: a gitnexus mcp process holding the lbug fd is detected', () => {
@@ -825,7 +826,7 @@ function runScanFdEnotdir(): { verdict: string; owned: boolean } {
 // the scan reports owned. Crucially we assert against OUR holder's identity, not
 // "any owner" — this host runs background gitnexus servers, so a bare
 // truthiness check could be a false positive.
-describe.skipIf(!isLinux)('Linux DB-owner scan — live /proc e2e (#2180)', () => {
+describe.skipIf(!HAS_PROBE || !isLinux)('Linux DB-owner scan — live /proc e2e (#2180)', () => {
   it('detects a real fd-visible gitnexus-mcp-shaped lbug holder', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gitnexus-e2e-'));
     const lbugPath = path.join(dir, 'lbug');

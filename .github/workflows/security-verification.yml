@@ -35,8 +35,6 @@ jobs:
 
       - name: Setup GitNexus
         uses: ./.github/actions/setup-gitnexus
-        with:
-          lifecycle-scripts: 'false'
 
       - name: Verify @scarf/scarf is absent from manifest, lockfile, and tree
         shell: bash

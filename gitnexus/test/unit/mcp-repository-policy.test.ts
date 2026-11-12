@@ -321,9 +321,9 @@ describe('MCP repository policy', () => {
       search_query: 'auth',
       repo: '/repos/alpha',
     });
-    await expect(
-      scoped.callTool('query', { search_query: 'auth', repo: 'Beta' }),
-    ).rejects.toThrow(/not available through this MCP server/i);
+    await expect(scoped.callTool('query', { search_query: 'auth', repo: 'Beta' })).rejects.toThrow(
+      /not available through this MCP server/i,
+    );
     expect(backend.callTool).toHaveBeenCalledTimes(1);
   });
 
@@ -335,9 +335,9 @@ describe('MCP repository policy', () => {
     const scoped = policy.scopeBackend(backend);
 
     expect((await scoped.listRepos()).map((repo) => repo.name)).toEqual(['Root']);
-    await expect(
-      scoped.callTool('query', { search_query: 'auth', repo: 'Alpha' }),
-    ).rejects.toThrow(/not available through this MCP server/i);
+    await expect(scoped.callTool('query', { search_query: 'auth', repo: 'Alpha' })).rejects.toThrow(
+      /not available through this MCP server/i,
+    );
     expect(backend.callTool).not.toHaveBeenCalled();
   });
 
@@ -403,9 +403,9 @@ describe('MCP repository policy', () => {
     };
     expect(listed.repositories.map((r) => r.name)).toEqual(['Alpha']);
 
-    await expect(
-      scoped.callTool('query', { search_query: 'auth', repo: 'Beta' }),
-    ).rejects.toThrow(/not available through this MCP server/i);
+    await expect(scoped.callTool('query', { search_query: 'auth', repo: 'Beta' })).rejects.toThrow(
+      /not available through this MCP server/i,
+    );
 
     await expect(
       createMcpRepositoryPolicy(backend, {

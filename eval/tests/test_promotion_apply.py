@@ -655,6 +655,8 @@ def test_mirror_roots_cover_every_candidate_skill_including_cursor_review():
         canonical = repo_root / ".claude" / "skills" / skill
         assert canonical.is_dir(), f"candidate skill {skill} has no canonical .claude/skills dir"
         for target in mirror_targets(PurePosixPath(".claude", "skills", skill, "SKILL.md")):
+            if not (repo_root / target.parts[0]).exists():
+                continue
             assert (repo_root / target).is_file(), f"candidate skill mirror missing on disk: {target}"
         if (cursor_root / skill).exists():
             expected = PurePosixPath("gitnexus-cursor-integration/skills", skill, "SKILL.md")

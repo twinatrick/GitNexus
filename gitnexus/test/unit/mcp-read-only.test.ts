@@ -61,6 +61,10 @@ function enableReadOnly(): void {
   vi.stubEnv('GITNEXUS_MCP_READ_ONLY', '1');
 }
 
+function disableReadOnly(): void {
+  vi.stubEnv('GITNEXUS_MCP_READ_ONLY', '0');
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
@@ -331,6 +335,7 @@ describe('MCP read-only mode', () => {
   });
 
   it('leaves normal-mode discovery and dispatch unchanged', async () => {
+    disableReadOnly();
     const session = await connect();
     try {
       const tools = await session.client.listTools();
@@ -354,6 +359,7 @@ describe('MCP read-only mode', () => {
   });
 
   it('keeps ordinary-mode rename destructive with a boolean dry_run', async () => {
+    disableReadOnly();
     const session = await connect();
     try {
       const { tools } = await session.client.listTools();
@@ -393,6 +399,7 @@ describe('MCP read-only mode', () => {
   ])(
     'forwards ordinary-mode rename as sent and hints the right next step when dry_run is %s',
     async (_label, extra, expectedHint, forbiddenHint) => {
+      disableReadOnly();
       const session = await connect();
       try {
         const isApply = 'dry_run' in extra && extra.dry_run === false;
@@ -421,6 +428,7 @@ describe('MCP read-only mode', () => {
   );
 
   it('requests a fresh preview when ordinary-mode apply has no plan token', async () => {
+    disableReadOnly();
     const session = await connect();
     try {
       session.backend.callTool.mockResolvedValueOnce({
@@ -451,6 +459,7 @@ describe('MCP read-only mode', () => {
     ['true', { dry_run: true }],
     ['false', { dry_run: false }],
   ])('routes ordinary-mode rename by explicit repo when dry_run is %s', async (_label, extra) => {
+    disableReadOnly();
     const session = await connect();
     try {
       const arguments_ = {

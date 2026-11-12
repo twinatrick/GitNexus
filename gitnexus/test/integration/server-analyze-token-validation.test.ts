@@ -104,7 +104,12 @@ describeBlock('POST /api/analyze token validation (real server)', () => {
       [DIST_CLI, 'serve', '--port', String(port), '--host', '127.0.0.1'],
       {
         cwd: REPO_ROOT,
-        env: { ...process.env, GITNEXUS_HOME: homeDir, NODE_OPTIONS: '' },
+        env: {
+          ...process.env,
+          GITNEXUS_HOME: homeDir,
+          GITNEXUS_ALLOW_REMOTE_CLONE: '1',
+          NODE_OPTIONS: '',
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );

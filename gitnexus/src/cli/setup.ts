@@ -300,7 +300,11 @@ function getOpenCodeMcpEntry() {
   }
 
   if (process.platform === 'win32') {
-    return { type: 'local', command: ['cmd', '/c', 'npx', '-y', MCP_PINNED_REF, 'mcp'], environment };
+    return {
+      type: 'local',
+      command: ['cmd', '/c', 'npx', '-y', MCP_PINNED_REF, 'mcp'],
+      environment,
+    };
   }
   return { type: 'local', command: ['npx', '-y', MCP_PINNED_REF, 'mcp'], environment };
 }
@@ -1482,7 +1486,10 @@ async function installCodexSkills(result: SetupResult): Promise<void> {
 
 // ─── Main command ──────────────────────────────────────────────────
 
-export const setupCommand = async (options?: { codingAgent?: string[] | string; airGap?: boolean }) => {
+export const setupCommand = async (options?: {
+  codingAgent?: string[] | string;
+  airGap?: boolean;
+}) => {
   if (options?.airGap) process.env[AIR_GAP_ENV] = '1';
   const explicitSelection = options?.codingAgent != null;
   const selected = selectedCodingAgents(options?.codingAgent);

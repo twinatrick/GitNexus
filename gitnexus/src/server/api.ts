@@ -114,14 +114,13 @@ import {
 import { createLaunchAnalysisWorker } from './analyze-launch.js';
 import { UPLOAD_ROOT } from './upload-paths.js';
 import { sweepStaleUploads } from './upload-sweep.js';
-import { isRfc1918PrivateIpv4 } from './private-ip.js';
 import { logger, flushLoggerSync } from '../core/logger.js';
 import {
   bindServeUpdateControllerLifecycle,
   buildServerInfo,
   createServeUpdateController,
 } from './update-controller.js';
-import { buildOpsSnapshot, isGitNexusVercelOrigin, serializeOpsJob } from './ops-snapshot.js';
+import { buildOpsSnapshot, serializeOpsJob } from './ops-snapshot.js';
 
 export {
   bindServeUpdateControllerLifecycle,
@@ -837,7 +836,9 @@ export const handleFileRequest = async (
       return;
     }
     if (!secretReadsAllowed() && (isSensitiveFile(filePath) || isSensitiveFile(realRel))) {
-      res.status(403).json({ error: 'Access to sensitive secret or credential file is denied by security policy' });
+      res.status(403).json({
+        error: 'Access to sensitive secret or credential file is denied by security policy',
+      });
       return;
     }
 
@@ -929,7 +930,8 @@ export const handleQueryRequest = async (
     process.env.GITNEXUS_HTTP_ALLOW_CYPHER !== '1'
   ) {
     res.status(403).json({
-      error: 'Raw Cypher queries are disabled when read-only policy is active (set GITNEXUS_MCP_READ_ONLY=0 to enable)',
+      error:
+        'Raw Cypher queries are disabled when read-only policy is active (set GITNEXUS_MCP_READ_ONLY=0 to enable)',
     });
     return;
   }
@@ -1947,7 +1949,8 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
           } catch (err) {
             if (err instanceof PathContainmentError) {
               res.status(403).json({
-                error: 'Analyzing directories outside the active workspace is denied by security policy',
+                error:
+                  'Analyzing directories outside the active workspace is denied by security policy',
               });
               return;
             }

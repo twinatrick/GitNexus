@@ -22,7 +22,10 @@ export class PathContainmentError extends Error {
 /** True when `target` is the root itself or lives below it (lexical). */
 export function isLexicallyInside(root: string, target: string): boolean {
   const relative = path.relative(root, target);
-  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+  return (
+    relative === '' ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
+  );
 }
 
 /**

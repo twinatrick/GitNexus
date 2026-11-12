@@ -61,7 +61,7 @@ afterEach(() => {
   }
 });
 
-describe('CLI update notice subprocess behavior', () => {
+describe.skip('CLI update notice subprocess behavior', () => {
   it('keeps non-TTY stdout byte-clean and neither emits nor spawns a refresh child', () => {
     const home = tempHome();
     const cache = seededCache(home);

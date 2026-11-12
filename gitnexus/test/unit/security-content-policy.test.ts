@@ -78,9 +78,9 @@ describe('needsContentPolicyReindex', () => {
   });
 
   it('accepts an index stamped with the current version', () => {
-    expect(needsContentPolicyReindex({ securityPolicyVersion: SECURITY_CONTENT_POLICY_VERSION })).toBe(
-      false,
-    );
+    expect(
+      needsContentPolicyReindex({ securityPolicyVersion: SECURITY_CONTENT_POLICY_VERSION }),
+    ).toBe(false);
   });
 
   it('rejects an older stamp', () => {
@@ -104,7 +104,11 @@ describe('suppressedContentWarning', () => {
 
 describe('graph node mapping withholds sensitive content (SEC-002)', () => {
   it('drops content for a secret file even when includeContent is true', () => {
-    const node = mapGraphNodeRow('File', { id: 'f1', filePath: '.env', content: 'AWS_KEY=x' }, true);
+    const node = mapGraphNodeRow(
+      'File',
+      { id: 'f1', filePath: '.env', content: 'AWS_KEY=x' },
+      true,
+    );
     expect(node.properties.content).toBeUndefined();
   });
 

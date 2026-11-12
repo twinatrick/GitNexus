@@ -848,15 +848,19 @@ describe('canonicalizePath vs the \\\\?\\ long-path prefix (#2667)', () => {
 
 describe('API key file permissions', () => {
   it('saveCLIConfig calls chmod 0o600 on non-Windows', async () => {
-    // We verify that the saveCLIConfig code has the chmod call
-    // by reading the source and checking statically.
-    // The actual chmod behavior is platform-dependent.
-    const source = await fs.readFile(
+    // We verify that saveCLIConfig delegates to ensurePrivateFile(configPath)
+    // which enforces 0o600 on POSIX and icacls on Windows.
+    const repoManagerSource = await fs.readFile(
       path.join(process.cwd(), 'src', 'storage', 'repo-manager.ts'),
       'utf-8',
     );
-    expect(source).toContain('chmod(configPath, 0o600)');
-    expect(source).toContain("process.platform !== 'win32'");
+    const privateDirsSource = await fs.readFile(
+      path.join(process.cwd(), 'src', 'storage', 'private-dirs.ts'),
+      'utf-8',
+    );
+    expect(repoManagerSource).toContain('ensurePrivateFile(configPath)');
+    expect(privateDirsSource).toContain('PRIVATE_FILE_MODE = 0o600');
+    expect(privateDirsSource).toContain('fs.chmod(filePath, PRIVATE_FILE_MODE)');
   });
 });
 

@@ -30,13 +30,14 @@ describe('MCP index generation freshness', () => {
   let repo: string;
   let ftsLoaded = false;
   const backend = new LocalBackend();
-  const server = createMCPServer(backend);
+  const server = createMCPServer(backend, { readOnly: false });
   const client = new Client({ name: 'index-generation-regression', version: '1.0.0' });
 
   beforeAll(async () => {
     temp = await createTempDir();
     const root = await fs.realpath(temp.dbPath);
     vi.stubEnv('GITNEXUS_HOME', path.join(root, 'home'));
+    vi.stubEnv('GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY', '1');
     vi.stubEnv('GITNEXUS_STORAGE_PATH', undefined);
     vi.stubEnv('GITNEXUS_STORAGE_ROOT', undefined);
     vi.stubEnv('GITNEXUS_SHARED_STORE', 'off');

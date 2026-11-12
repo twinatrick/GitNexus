@@ -28,8 +28,7 @@ afterAll(async () => {
   await fs.rm(tmp, { recursive: true, force: true });
 });
 
-const modeOf = async (target: string): Promise<number> =>
-  (await fs.stat(target)).mode & 0o777;
+const modeOf = async (target: string): Promise<number> => (await fs.stat(target)).mode & 0o777;
 
 describe('ensurePrivateDirectory', () => {
   it('creates nested directories', async () => {
@@ -164,9 +163,7 @@ describe('ensurePrivateFile', () => {
       return ctx.skip();
     }
 
-    await expect(ensurePrivateFile(target)).rejects.toBeInstanceOf(
-      InsecureStoragePermissionsError,
-    );
+    await expect(ensurePrivateFile(target)).rejects.toBeInstanceOf(InsecureStoragePermissionsError);
 
     if (process.platform !== 'win32') {
       expect(await modeOf(outside)).toBe(0o644);

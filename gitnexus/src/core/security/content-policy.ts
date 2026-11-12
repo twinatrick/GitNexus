@@ -47,9 +47,14 @@ export function contentAllowedForPath(
  * exclusion list. Absence is NOT treated as "current" — the same direction
  * `contentRetentionSchemaVersion` already takes.
  */
-export function needsContentPolicyReindex(meta: {
-  securityPolicyVersion?: number;
-} | null | undefined): boolean {
+export function needsContentPolicyReindex(
+  meta:
+    | {
+        securityPolicyVersion?: number;
+      }
+    | null
+    | undefined,
+): boolean {
   return (meta?.securityPolicyVersion ?? 0) < SECURITY_CONTENT_POLICY_VERSION;
 }
 

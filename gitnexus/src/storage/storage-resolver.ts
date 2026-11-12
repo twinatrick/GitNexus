@@ -736,7 +736,9 @@ export const ensureStoragePathWritable = async (storagePath: string): Promise<vo
   try {
     const existing = await fsp.lstat(resolved);
     if (existing.isSymbolicLink()) {
-      throw new InvalidStoragePathError(`Index storage path must not be a symbolic link: ${resolved}`);
+      throw new InvalidStoragePathError(
+        `Index storage path must not be a symbolic link: ${resolved}`,
+      );
     }
   } catch (error) {
     if (error instanceof InvalidStoragePathError || !isMissingFilesystemError(error)) {

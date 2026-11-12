@@ -3652,44 +3652,43 @@ describe('runFullAnalysis embedding-checkpoint resilience (#2790 review)', () =>
     }
   });
 
-  it.skipIf(process.platform === 'win32')(
-    'retains the referenced stage through a symlinked storage directory',
-    async () => {
-      const tmpRepo = await createTempDir('gitnexus-3456-storage-alias-');
-      try {
-        const { storagePath } = getStoragePaths(tmpRepo.dbPath);
-        const actualStorage = `${tmpRepo.dbPath}/actual-index`;
-        await fs.mkdir(actualStorage);
-        await fs.symlink(actualStorage, storagePath, 'dir');
-        await seedMeta(storagePath, tmpRepo.dbPath, { stats: { embeddings: 7 } });
-        mockResilienceHarness({
-          count: [{ cnt: 9 }],
-          pipeline: async (options) => {
-            await options.onCheckpointWindowStart?.({
-              nodesProcessed: 0,
-              totalNodes: 3,
-              chunksProcessed: 0,
-              nodeIds: ['active-node'],
-            });
-            await options.onCheckpoint?.({ nodesProcessed: 1, totalNodes: 3, chunksProcessed: 9 });
-            throw new Error('endpoint failed after durable window');
-          },
-        });
-        await mockStagedFiles();
-        expect(
-          await runAnalyze(tmpRepo.dbPath, { force: true, embeddings: true }, []),
-        ).toMatchObject({ message: 'endpoint failed after durable window' });
-        const recovery = (await loadMeta(storagePath))?.embeddingCheckpoint?.recovery;
-        if (!recovery) throw new Error('expected retained recovery generation');
-        expect(await fs.readFile(`${actualStorage}/${recovery.stagingFile}`, 'utf8')).toBe(
-          'staged fixture',
-        );
-        expect((await loadMeta(storagePath))?.stats?.embeddings).toBe(7);
-      } finally {
-        await tmpRepo.cleanup();
-      }
-    },
-  );
+  // SEC-006: symlinked `.gitnexus` storage directories are now rejected fail-closed
+  // by `ensurePrivateDirectory` / `inspectStoragePath` (`InsecureStoragePermissionsError`).
+  it.skip('retains the referenced stage through a symlinked storage directory', async () => {
+    const tmpRepo = await createTempDir('gitnexus-3456-storage-alias-');
+    try {
+      const { storagePath } = getStoragePaths(tmpRepo.dbPath);
+      const actualStorage = `${tmpRepo.dbPath}/actual-index`;
+      await fs.mkdir(actualStorage);
+      await fs.symlink(actualStorage, storagePath, 'dir');
+      await seedMeta(storagePath, tmpRepo.dbPath, { stats: { embeddings: 7 } });
+      mockResilienceHarness({
+        count: [{ cnt: 9 }],
+        pipeline: async (options) => {
+          await options.onCheckpointWindowStart?.({
+            nodesProcessed: 0,
+            totalNodes: 3,
+            chunksProcessed: 0,
+            nodeIds: ['active-node'],
+          });
+          await options.onCheckpoint?.({ nodesProcessed: 1, totalNodes: 3, chunksProcessed: 9 });
+          throw new Error('endpoint failed after durable window');
+        },
+      });
+      await mockStagedFiles();
+      expect(await runAnalyze(tmpRepo.dbPath, { force: true, embeddings: true }, [])).toMatchObject(
+        { message: 'endpoint failed after durable window' },
+      );
+      const recovery = (await loadMeta(storagePath))?.embeddingCheckpoint?.recovery;
+      if (!recovery) throw new Error('expected retained recovery generation');
+      expect(await fs.readFile(`${actualStorage}/${recovery.stagingFile}`, 'utf8')).toBe(
+        'staged fixture',
+      );
+      expect((await loadMeta(storagePath))?.stats?.embeddings).toBe(7);
+    } finally {
+      await tmpRepo.cleanup();
+    }
+  });
 
   it.each(['checkpoint', 'metadata'] as const)(
     'keeps the previous source when %s fails before recovery handoff',

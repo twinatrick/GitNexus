@@ -83,7 +83,8 @@ const HOME = path.join(WORK, 'home');
 process.env.GITNEXUS_HOME = HOME;
 delete process.env.GITNEXUS_MCP_ALLOWED_REPOS;
 delete process.env.GITNEXUS_MCP_DEFAULT_REPO;
-delete process.env.GITNEXUS_MCP_READ_ONLY;
+process.env.GITNEXUS_MCP_READ_ONLY = '0';
+process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY = '1';
 
 function git(cwd, args) {
   return execFileSync('git', args, {

@@ -25,6 +25,13 @@ vi.mock('child_process', () => ({
 }));
 
 describe('setupOpenCode — JSONC preservation', () => {
+  beforeEach(() => {
+    process.env.GITNEXUS_ALLOW_NPX_FALLBACK = '1';
+  });
+
+  afterEach(() => {
+    delete process.env.GITNEXUS_ALLOW_NPX_FALLBACK;
+  });
   let tempHome: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;
@@ -379,7 +386,8 @@ describe('setupOpenCode — JSONC preservation', () => {
   });
 });
 
-describe('setupCursor — JSONC preservation', () => {
+// OpenCode-only fork: Cursor and Claude Code setup targets are skipped.
+describe.skip('setupCursor — JSONC preservation', () => {
   let tempHome: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;
@@ -480,7 +488,7 @@ describe('setupCursor — JSONC preservation', () => {
   });
 });
 
-describe('setupClaudeCode — JSONC preservation', () => {
+describe.skip('setupClaudeCode — JSONC preservation', () => {
   let tempHome: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;
@@ -567,7 +575,7 @@ describe('setupClaudeCode — JSONC preservation', () => {
   });
 });
 
-describe('installClaudeCodeHooks — JSONC preservation', () => {
+describe.skip('installClaudeCodeHooks — JSONC preservation', () => {
   let tempHome: string;
   let originalHome: string | undefined;
   let originalUserProfile: string | undefined;

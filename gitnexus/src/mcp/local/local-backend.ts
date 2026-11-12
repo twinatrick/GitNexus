@@ -10405,7 +10405,9 @@ export class LocalBackend {
       return { error: 'Path traversal denied.' };
     }
     if (!secretReadsAllowed() && (isSensitiveFile(rawPath) || isSensitiveFile(realRel))) {
-      return { error: 'Access to sensitive secret or credential file is denied by security policy.' };
+      return {
+        error: 'Access to sensitive secret or credential file is denied by security policy.',
+      };
     }
     const raw = await fs.readFile(realFull, 'utf-8');
     const lines = raw.split('\n');

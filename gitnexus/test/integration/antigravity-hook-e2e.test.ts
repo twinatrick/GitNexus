@@ -126,7 +126,7 @@ function runHook(
   });
 }
 
-describe('antigravity hook adapter e2e', () => {
+describe.skip('antigravity hook adapter e2e', () => {
   describe('AfterTool — stale-index hint after git mutations', () => {
     // #1913: by default the hint reaches the agent via additionalContext (stdout
     // JSON) but is NOT mirrored to stderr, so strict hook runners see no

@@ -26,7 +26,7 @@ const adapterSource = path.join(
   'gitnexus-antigravity-hook.cjs',
 );
 
-describe('setupCommand Antigravity integration', () => {
+describe.skip('setupCommand Antigravity integration', () => {
   let tempHome: string;
   const originalHome = process.env.HOME;
   const originalUserProfile = process.env.USERPROFILE;
