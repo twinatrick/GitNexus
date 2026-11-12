@@ -1019,10 +1019,11 @@ export const resolveAnalyzeRepoPath = async (
 ): Promise<string> => resolveContainedPath(workspaceRoot, repoLocalPath);
 
 export const createServer = async (port: number, host: string = '127.0.0.1') => {
-  // Refuse a public-origin config before anything is opened or bound: `serve`
-  // has no authentication yet, so the setting that makes a public bind usable
-  // must not be usable either. Throws — `serve` reports it and exits non-zero.
-  assertServeAuthForPublicOrigin();
+  // Refuse a public-origin config or an unauthenticated non-loopback bind
+  // before anything is opened or bound: `serve` has no authentication yet, so
+  // non-loopback exposure must not be usable without an authenticating proxy.
+  // Throws — `serve` reports it and exits non-zero.
+  assertServeAuthForPublicOrigin(host);
 
   // Surface a cleartext Azure DevOps PAT config at boot (operators rarely
   // read per-request logs). Warn-only — http:// self-hosted stays supported.
@@ -1940,7 +1941,7 @@ export const createServer = async (port: number, host: string = '127.0.0.1') => 
         // workspace root and the requested path. TOCTOU is handled downstream:
         // the walker re-resolves every entry while traversing.
         let analyzeRepoPath = repoLocalPath;
-        if (repoLocalPath && process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY !== '1') {
+        if (repoLocalPath) {
           try {
             analyzeRepoPath = await resolveAnalyzeRepoPath(repoLocalPath);
           } catch (err) {

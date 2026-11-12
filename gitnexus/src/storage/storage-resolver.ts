@@ -482,8 +482,15 @@ export const inspectStoragePath = async (
   let primary: MetadataReadResult;
   try {
     const linkStat = await fsp.lstat(inspectedStorage);
-    const targetStat = linkStat.isSymbolicLink() ? await fsp.stat(inspectedStorage) : linkStat;
-    if (!targetStat.isDirectory()) {
+    if (linkStat.isSymbolicLink()) {
+      return {
+        ...context,
+        state: 'invalid_storage',
+        hasCodeIndexDB: false,
+        reason: 'Storage path must not be a symbolic link.',
+      };
+    }
+    if (!linkStat.isDirectory()) {
       return {
         ...context,
         state: 'invalid_storage',
@@ -726,9 +733,19 @@ export const requireDeletableStoragePath = async (entry: {
 /** Ensure a selected index directory is usable before an analysis takes its lock. */
 export const ensureStoragePathWritable = async (storagePath: string): Promise<void> => {
   const resolved = validateConfiguredStoragePath(storagePath);
+  try {
+    const existing = await fsp.lstat(resolved);
+    if (existing.isSymbolicLink()) {
+      throw new InvalidStoragePathError(`Index storage path must not be a symbolic link: ${resolved}`);
+    }
+  } catch (error) {
+    if (error instanceof InvalidStoragePathError || !isMissingFilesystemError(error)) {
+      throw error;
+    }
+  }
   await fsp.mkdir(resolved, { recursive: true });
-  const stat = await fsp.stat(resolved);
-  if (!stat.isDirectory()) {
+  const stat = await fsp.lstat(resolved);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
     throw new InvalidStoragePathError(`Index storage path is not a directory: ${resolved}`);
   }
   await fsp.access(resolved, fs.constants.R_OK | fs.constants.W_OK);

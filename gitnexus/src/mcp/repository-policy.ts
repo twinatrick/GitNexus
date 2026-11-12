@@ -456,26 +456,9 @@ export async function createMcpRepositoryPolicy(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<McpRepositoryPolicy> {
   const raw = parseRepositoryPolicy(env);
-  if (!raw.allowed && !raw.defaultRepo) {
-    if (env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY === '1') {
-      return McpRepositoryPolicy.unrestricted();
-    }
-    const registry = (await backend.listRepos()).map((repo) => ({
-      name: repo.name,
-      path: repo.path,
-      pathKey: normalizedPath(repo.path),
-    }));
-    const cwdKey = normalizedPath(env.GITNEXUS_WORKSPACE_ROOT || process.cwd());
-    // SEC-003: only the repository rooted exactly at the CWD is implied. The
-    // previous ancestor/descendant prefix match handed a server started in
-    // `/workspace/project-a` access to `/workspace` (and everything below
-    // `/workspace` when started there), which is broader than least privilege.
-    const cwdScoped = registry.filter((repo) => repo.pathKey === cwdKey);
-    return new McpRepositoryPolicy(
-      registry,
-      cwdScoped,
-      cwdScoped.length === 1 ? cwdScoped[0] : undefined,
-    );
+  const allowGlobalRegistry = env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY === '1';
+  if (!raw.allowed && !raw.defaultRepo && allowGlobalRegistry) {
+    return McpRepositoryPolicy.unrestricted();
   }
 
   const registry = (await backend.listRepos()).map((repo) => ({
@@ -493,6 +476,13 @@ export async function createMcpRepositoryPolicy(
       byPath.set(result.repo.pathKey, result.repo);
     }
     allowed = [...byPath.values()];
+  } else if (!allowGlobalRegistry) {
+    const cwdKey = normalizedPath(env.GITNEXUS_WORKSPACE_ROOT || process.cwd());
+    // SEC-003: only the repository rooted exactly at the CWD is implied unless
+    // the caller explicitly sets GITNEXUS_MCP_ALLOWED_REPOS or opts into the
+    // global registry via GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY=1. Setting only
+    // GITNEXUS_MCP_DEFAULT_REPO must NOT bypass CWD scoping.
+    allowed = registry.filter((repo) => repo.pathKey === cwdKey);
   }
 
   let defaultRepo: ResolvedRepository | undefined;
@@ -500,6 +490,8 @@ export async function createMcpRepositoryPolicy(
     const result = resolveSpecifier(raw.defaultRepo, registry);
     if (!result.repo) throw startupResolutionError(result.reason ?? 'invalid');
     defaultRepo = result.repo;
+  } else if (allowed && allowed.length === 1) {
+    defaultRepo = allowed[0];
   }
 
   const defaultPathKey = defaultRepo?.pathKey;

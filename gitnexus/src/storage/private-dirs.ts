@@ -18,13 +18,57 @@ const execFileAsync = promisify(execFile);
 export const PRIVATE_DIRECTORY_MODE = 0o700;
 export const PRIVATE_FILE_MODE = 0o600;
 
+export class InsecureStoragePermissionsError extends Error {
+  readonly code = 'INSECURE_STORAGE_PERMISSIONS' as const;
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'InsecureStoragePermissionsError';
+  }
+}
+
 /** True on platforms where POSIX mode bits are meaningful. */
 function supportsPosixModes(): boolean {
   return process.platform !== 'win32';
 }
 
 export async function ensurePrivateDirectory(directory: string): Promise<void> {
+  try {
+    const preStats = await fs.lstat(directory);
+    if (preStats.isSymbolicLink()) {
+      throw new InsecureStoragePermissionsError(
+        `Refusing to use symbolic link as private directory: ${directory}`,
+      );
+    }
+    if (!preStats.isDirectory()) {
+      throw new InsecureStoragePermissionsError(
+        `Private storage path exists and is not a directory: ${directory}`,
+      );
+    }
+  } catch (error) {
+    if (
+      error instanceof InsecureStoragePermissionsError ||
+      (error as NodeJS.ErrnoException)?.code !== 'ENOENT'
+    ) {
+      throw error;
+    }
+  }
+
   await fs.mkdir(directory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
+
+  const stats = await fs.lstat(directory);
+
+  // Never chmod or write through a symlink: fail closed.
+  if (stats.isSymbolicLink()) {
+    throw new InsecureStoragePermissionsError(
+      `Refusing to use symbolic link as private directory: ${directory}`,
+    );
+  }
+  if (!stats.isDirectory()) {
+    throw new InsecureStoragePermissionsError(
+      `Private storage path is not a directory: ${directory}`,
+    );
+  }
 
   // Windows uses ACLs; chmod only toggles the read-only bit and would not
   // provide the intended protection.
@@ -33,25 +77,22 @@ export async function ensurePrivateDirectory(directory: string): Promise<void> {
     return;
   }
 
-  let stats: Awaited<ReturnType<typeof fs.lstat>>;
-  try {
-    stats = await fs.lstat(directory);
-  } catch {
-    return;
-  }
-
-  // Never chmod through a symlink: the link target may be outside our tree.
-  if (stats.isSymbolicLink() || !stats.isDirectory()) return;
-
-  // Only manage directories owned by the current user.
+  // Only manage directories owned by the current user; fail closed if owned by another user.
   const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
-  if (uid !== undefined && stats.uid !== uid) return;
+  if (uid !== undefined && stats.uid !== uid) {
+    throw new InsecureStoragePermissionsError(
+      `Private directory is not owned by the current user: ${directory}`,
+    );
+  }
 
   if ((stats.mode & 0o077) !== 0) {
     try {
       await fs.chmod(directory, PRIVATE_DIRECTORY_MODE);
-    } catch {
-      /* best-effort: reading an over-permissive dir is still possible */
+    } catch (cause) {
+      throw new InsecureStoragePermissionsError(
+        `Failed to enforce 0700 permissions on private directory: ${directory}`,
+        { cause },
+      );
     }
   }
 }
@@ -105,11 +146,23 @@ export async function ensurePrivateFile(filePath: string): Promise<void> {
   let stats: Awaited<ReturnType<typeof fs.lstat>>;
   try {
     stats = await fs.lstat(filePath);
-  } catch {
-    return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return;
+    throw new InsecureStoragePermissionsError(`Cannot inspect private file: ${filePath}`, {
+      cause: error,
+    });
   }
 
-  if (stats.isSymbolicLink() || !stats.isFile()) return;
+  if (stats.isSymbolicLink()) {
+    throw new InsecureStoragePermissionsError(
+      `Refusing to use symbolic link as private file: ${filePath}`,
+    );
+  }
+  if (!stats.isFile()) {
+    throw new InsecureStoragePermissionsError(
+      `Private file path is not a regular file: ${filePath}`,
+    );
+  }
 
   if (!supportsPosixModes()) {
     await tightenWindowsAcl(filePath, 'file');
@@ -117,13 +170,20 @@ export async function ensurePrivateFile(filePath: string): Promise<void> {
   }
 
   const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
-  if (uid !== undefined && stats.uid !== uid) return;
+  if (uid !== undefined && stats.uid !== uid) {
+    throw new InsecureStoragePermissionsError(
+      `Private file is not owned by the current user: ${filePath}`,
+    );
+  }
 
   if ((stats.mode & 0o077) !== 0) {
     try {
       await fs.chmod(filePath, PRIVATE_FILE_MODE);
-    } catch {
-      /* best-effort */
+    } catch (cause) {
+      throw new InsecureStoragePermissionsError(
+        `Failed to enforce 0600 permissions on private file: ${filePath}`,
+        { cause },
+      );
     }
   }
 }

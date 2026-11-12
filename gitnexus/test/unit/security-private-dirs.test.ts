@@ -9,11 +9,14 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  InsecureStoragePermissionsError,
   PRIVATE_DIRECTORY_MODE,
   PRIVATE_FILE_MODE,
   ensurePrivateDirectory,
   ensurePrivateFile,
 } from '../../src/storage/private-dirs.js';
+import { saveMeta } from '../../src/storage/repo-manager.js';
+import { inspectStoragePath } from '../../src/storage/storage-resolver.js';
 
 let tmp: string;
 
@@ -62,7 +65,7 @@ describe('ensurePrivateDirectory', () => {
     expect(await modeOf(target)).toBe(PRIVATE_DIRECTORY_MODE);
   });
 
-  it('does not chmod through a symlink', async (ctx) => {
+  it('fails closed on a symlink without chmodding through it', async (ctx) => {
     const target = path.join(tmp, 'symlink-escape');
     const outside = path.join(tmp, 'outside-target');
     await fs.mkdir(outside, { recursive: true });
@@ -72,8 +75,9 @@ describe('ensurePrivateDirectory', () => {
     } catch {
       return ctx.skip();
     }
-    // Must not throw, but must also not follow the link.
-    await ensurePrivateDirectory(target);
+    await expect(ensurePrivateDirectory(target)).rejects.toBeInstanceOf(
+      InsecureStoragePermissionsError,
+    );
     if (process.platform !== 'win32') {
       expect(await modeOf(outside)).toBe(0o755);
     }
@@ -83,7 +87,42 @@ describe('ensurePrivateDirectory', () => {
     if (process.platform === 'win32') return ctx.skip();
     const target = path.join(tmp, 'not-a-dir');
     await fs.writeFile(target, 'x');
-    await expect(ensurePrivateDirectory(target)).rejects.toThrow(/EEXIST|ENOTDIR|exists/i);
+    await expect(ensurePrivateDirectory(target)).rejects.toBeInstanceOf(
+      InsecureStoragePermissionsError,
+    );
+  });
+
+  it('refuses saveMeta() and inspectStoragePath() through a symlinked .gitnexus', async (ctx) => {
+    const repo = path.join(tmp, 'repo-with-symlink-storage');
+    const sharedStorage = path.join(tmp, 'shared-storage');
+    await fs.mkdir(repo, { recursive: true });
+    await fs.mkdir(sharedStorage, { recursive: true });
+    const symlinkStorage = path.join(repo, '.gitnexus');
+    try {
+      await fs.symlink(
+        sharedStorage,
+        symlinkStorage,
+        process.platform === 'win32' ? 'junction' : 'dir',
+      );
+    } catch {
+      return ctx.skip();
+    }
+
+    await expect(
+      saveMeta(symlinkStorage, {
+        repoPath: repo,
+        lastCommit: '0123456789abcdef0123456789abcdef01234567',
+        indexedAt: new Date().toISOString(),
+      }),
+    ).rejects.toBeInstanceOf(InsecureStoragePermissionsError);
+
+    await expect(fs.stat(path.join(sharedStorage, 'gitnexus.json'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+
+    const inspection = await inspectStoragePath(symlinkStorage, repo);
+    expect(inspection.state).toBe('invalid_storage');
+    expect(inspection.reason).toMatch(/symbolic link/i);
   });
 });
 
@@ -114,7 +153,7 @@ describe('ensurePrivateFile', () => {
     expect(await modeOf(target)).toBe(PRIVATE_FILE_MODE);
   });
 
-  it('does not chmod through a symlink', async (ctx) => {
+  it('fails closed on a symlink without chmodding through it', async (ctx) => {
     const outside = path.join(tmp, 'outside-file.json');
     const target = path.join(tmp, 'registry-link.json');
     await fs.writeFile(outside, '{}');
@@ -125,7 +164,9 @@ describe('ensurePrivateFile', () => {
       return ctx.skip();
     }
 
-    await ensurePrivateFile(target);
+    await expect(ensurePrivateFile(target)).rejects.toBeInstanceOf(
+      InsecureStoragePermissionsError,
+    );
 
     if (process.platform !== 'win32') {
       expect(await modeOf(outside)).toBe(0o644);

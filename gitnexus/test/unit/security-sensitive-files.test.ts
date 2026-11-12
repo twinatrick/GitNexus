@@ -78,11 +78,15 @@ describe('isSensitiveFile', () => {
     expect(isSensitiveFile('C:\\repo\\.env.local')).toBe(true);
   });
 
-  it('blocks files inside credential directories', () => {
+  it('blocks files inside credential directories even when named like a template', () => {
     expect(isSensitiveFile('.ssh/config')).toBe(true);
     expect(isSensitiveFile('home/.aws/credentials')).toBe(true);
     expect(isSensitiveFile('.config/gcloud/application_default_credentials.json')).toBe(true);
     expect(isSensitiveFile('.gnupg/private-keys-v1.d/key.key')).toBe(true);
+    expect(isSensitiveFile('.ssh/.env.example')).toBe(true);
+    expect(isSensitiveFile('.aws/.env.sample')).toBe(true);
+    expect(isSensitiveFile('.env.example')).toBe(false);
+    expect(isSensitiveFile('config/.env.example')).toBe(false);
   });
 
   it('blocks the repository credential store', () => {

@@ -124,16 +124,16 @@ export function isSensitiveFile(value: string): boolean {
   const basename = normalized.slice(normalized.lastIndexOf('/') + 1);
   if (!basename) return false;
 
-  if (ALLOWED_TEMPLATE_BASENAMES.has(basename)) return false;
-
-  if (basename === '.env' || basename.startsWith('.env.')) return true;
-  if (SENSITIVE_BASENAMES.has(basename)) return true;
-  if (SENSITIVE_EXTENSION.test(basename)) return true;
-
   const trimmed = normalized.replace(/^\/+/u, '');
   for (const suffix of SENSITIVE_PATH_SUFFIXES) {
     if (trimmed === suffix || trimmed.endsWith(`/${suffix}`)) return true;
   }
 
-  return isSensitiveDirectory(normalized);
+  if (isSensitiveDirectory(normalized)) return true;
+
+  if (ALLOWED_TEMPLATE_BASENAMES.has(basename)) return false;
+
+  if (basename === '.env' || basename.startsWith('.env.')) return true;
+  if (SENSITIVE_BASENAMES.has(basename)) return true;
+  return SENSITIVE_EXTENSION.test(basename);
 }

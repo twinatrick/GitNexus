@@ -124,4 +124,24 @@ describe('analyze route hand-off (static tripwire)', () => {
     expect(apiSource).toContain('let targetPath = analyzeRepoPath;');
     expect(apiSource).not.toContain('let targetPath = repoLocalPath;');
   });
+
+  it('never disables HTTP analyze path containment when GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY=1', async () => {
+    const apiSource = await fs.readFile(
+      fileURLToPath(new URL('../../src/server/api.ts', import.meta.url)),
+      'utf-8',
+    );
+
+    expect(apiSource).not.toContain('GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY');
+
+    const prev = process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY;
+    process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY = '1';
+    try {
+      await expect(resolveAnalyzeRepoPath(outside, workspace)).rejects.toBeInstanceOf(
+        PathContainmentError,
+      );
+    } finally {
+      if (prev === undefined) delete process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY;
+      else process.env.GITNEXUS_MCP_ALLOW_GLOBAL_REGISTRY = prev;
+    }
+  });
 });
